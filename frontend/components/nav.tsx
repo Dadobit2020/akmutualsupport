@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
@@ -20,7 +21,17 @@ export function Nav() {
     <header className="bg-white border-b border-gray-100 sticky top-0 z-10">
       <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
         <div className="flex items-center gap-6">
-          <span className="font-bold text-green-800 text-lg tracking-tight">Addis Kidan</span>
+          <Link href="/dashboard" className="flex items-center gap-2">
+            <Image
+              src="/logo.png"
+              alt="Addis Kidan"
+              width={32}
+              height={32}
+              className="rounded-full object-contain"
+              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+            />
+            <span className="font-bold text-green-800 text-lg tracking-tight">Addis Kidan</span>
+          </Link>
           <nav className="hidden sm:flex items-center gap-1">
             {NAV_LINKS.map((link) => (
               <Link

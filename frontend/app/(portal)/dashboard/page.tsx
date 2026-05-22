@@ -100,6 +100,24 @@ export default function DashboardPage() {
         </Card>
       )}
 
+      {/* Make a Payment */}
+      <a
+        href="https://give.tithe.ly/?formId=137fb36c-d645-4d7d-abda-810d89026428&usedQrCode=true"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block"
+      >
+        <div className="rounded-2xl bg-green-700 hover:bg-green-800 transition-colors p-4 flex items-center justify-between shadow-sm">
+          <div>
+            <p className="text-white font-semibold text-sm">Make a payment online</p>
+            <p className="text-green-200 text-xs mt-0.5">Pay via Tithe.ly — secure card &amp; bank transfer</p>
+          </div>
+          <svg className="w-5 h-5 text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+          </svg>
+        </div>
+      </a>
+
       {/* Open obligations */}
       <div>
         <div className="flex items-center justify-between mb-3">
