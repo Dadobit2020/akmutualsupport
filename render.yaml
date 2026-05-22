@@ -1,0 +1,160 @@
+## Render.com Blueprint
+## Deploy with: render blueprint apply render.yaml
+## Full docs: https://render.com/docs/blueprint-spec
+
+services:
+  # ── Django API ────────────────────────────────────────────────────────────────
+  - type: web
+    name: addiskidan-api
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements/production.txt && python manage.py collectstatic --noinput && python manage.py migrate --noinput
+    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    healthCheckPath: /api/v1/auth/token/
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings.production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "False"
+      - key: ALLOWED_HOSTS
+        value: .onrender.com
+      - key: DATABASE_URL
+        fromDatabase:
+          name: addiskidan-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: addiskidan-redis
+          type: redis
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          name: addiskidan-redis
+          type: redis
+          property: connectionString
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false  # Set in dashboard: https://addiskidan-portal.onrender.com,https://yourdomain.com
+      - key: FRONTEND_URL
+        sync: false  # Set in dashboard: https://addiskidan-portal.onrender.com
+      - key: DEFAULT_FROM_EMAIL
+        value: noreply@addiskidan.org
+      - key: EMAIL_BACKEND
+        value: django.core.mail.backends.smtp.EmailBackend
+      - key: EMAIL_HOST
+        sync: false
+      - key: EMAIL_PORT
+        value: "587"
+      - key: EMAIL_HOST_USER
+        sync: false
+      - key: EMAIL_HOST_PASSWORD
+        sync: false
+      - key: EMAIL_USE_TLS
+        value: "True"
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_STORAGE_BUCKET_NAME
+        sync: false
+      - key: AWS_S3_ENDPOINT_URL
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+      - key: DEFAULT_ORGANIZATION_NAME
+        value: Addis Kidan Mutual Support Association
+      - key: RECONCILIATION_AUTO_APPLY_THRESHOLD
+        value: "90"
+      - key: RECONCILIATION_REVIEW_THRESHOLD
+        value: "60"
+
+  # ── Celery worker ─────────────────────────────────────────────────────────────
+  - type: worker
+    name: addiskidan-worker
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements/production.txt
+    startCommand: celery -A config.celery worker --loglevel=info --concurrency=2
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings.production
+      - key: SECRET_KEY
+        fromService:
+          name: addiskidan-api
+          type: web
+          envVarKey: SECRET_KEY
+      - key: DATABASE_URL
+        fromDatabase:
+          name: addiskidan-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: addiskidan-redis
+          type: redis
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          name: addiskidan-redis
+          type: redis
+          property: connectionString
+      - key: EMAIL_BACKEND
+        value: django.core.mail.backends.smtp.EmailBackend
+      - key: EMAIL_HOST
+        sync: false
+      - key: EMAIL_PORT
+        value: "587"
+      - key: EMAIL_HOST_USER
+        sync: false
+      - key: EMAIL_HOST_PASSWORD
+        sync: false
+      - key: DEFAULT_FROM_EMAIL
+        value: noreply@addiskidan.org
+      - key: EMAIL_USE_TLS
+        value: "True"
+
+  # ── Celery Beat (cron scheduler) ──────────────────────────────────────────────
+  - type: cron
+    name: addiskidan-daily-reminders
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements/production.txt
+    schedule: "0 9 * * *"  # 9:00 AM UTC daily
+    startCommand: python manage.py send_reminders
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings.production
+      - key: SECRET_KEY
+        fromService:
+          name: addiskidan-api
+          type: web
+          envVarKey: SECRET_KEY
+      - key: DATABASE_URL
+        fromDatabase:
+          name: addiskidan-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: addiskidan-redis
+          type: redis
+          property: connectionString
+
+  # ── Next.js member portal ──────────────────────────────────────────────────────
+  - type: web
+    name: addiskidan-portal
+    runtime: node
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        sync: false  # Set in dashboard: https://addiskidan-api.onrender.com/api/v1
+
+databases:
+  - name: addiskidan-db
+    databaseName: addis_kidan
+    plan: free  # change to starter/standard for production
+    user: addiskidan
+
+# Note: Render Redis is configured separately in the Render dashboard.
+# Add a Redis instance named "addiskidan-redis" before applying this blueprint.

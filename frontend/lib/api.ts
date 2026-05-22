@@ -1,0 +1,271 @@
+/**
+ * Thin API client wrapping the Django REST backend.
+ * All money values from the API are in cents (integers).
+ */
+
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
+
+// ── Token management ──────────────────────────────────────────────────────────
+
+const TOKEN_KEY = "ak_access";
+const REFRESH_KEY = "ak_refresh";
+
+export function saveTokens(access: string, refresh: string) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(TOKEN_KEY, access);
+  localStorage.setItem(REFRESH_KEY, refresh);
+}
+
+export function clearTokens() {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(REFRESH_KEY);
+}
+
+export function getAccessToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+export function getRefreshToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(REFRESH_KEY);
+}
+
+// ── Core fetch wrapper ────────────────────────────────────────────────────────
+
+async function refreshAccessToken(): Promise<string | null> {
+  const refresh = getRefreshToken();
+  if (!refresh) return null;
+  const res = await fetch(`${BASE_URL}/auth/token/refresh/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refresh }),
+  });
+  if (!res.ok) {
+    clearTokens();
+    return null;
+  }
+  const data = await res.json();
+  saveTokens(data.access, refresh);
+  return data.access;
+}
+
+async function apiFetch<T>(
+  path: string,
+  options: RequestInit = {},
+  retry = true
+): Promise<T> {
+  const token = getAccessToken();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(options.headers as Record<string, string>),
+  };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const res = await fetch(`${BASE_URL}${path}`, { ...options, headers });
+
+  if (res.status === 401 && retry) {
+    const newToken = await refreshAccessToken();
+    if (newToken) return apiFetch<T>(path, options, false);
+    throw new ApiError(401, "Session expired. Please log in again.");
+  }
+
+  if (!res.ok) {
+    let detail = `HTTP ${res.status}`;
+    try {
+      const body = await res.json();
+      detail = body?.error?.detail ?? body?.detail ?? detail;
+    } catch {}
+    throw new ApiError(res.status, detail);
+  }
+
+  if (res.status === 204) return undefined as T;
+  return res.json();
+}
+
+export class ApiError extends Error {
+  constructor(
+    public status: number,
+    public detail: string | object
+  ) {
+    super(typeof detail === "string" ? detail : JSON.stringify(detail));
+  }
+}
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+
+export interface LoginPayload {
+  email: string;
+  password: string;
+  mfa_token?: string;
+}
+
+export interface AuthResponse {
+  access: string;
+  refresh: string;
+  user: User;
+}
+
+export interface User {
+  id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  full_name: string;
+  mfa_enabled: boolean;
+  is_active: boolean;
+}
+
+export async function login(payload: LoginPayload): Promise<AuthResponse> {
+  return apiFetch<AuthResponse>("/auth/token/", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getCurrentUser(): Promise<User> {
+  return apiFetch<User>("/auth/me/");
+}
+
+export async function updateProfile(data: Partial<User>): Promise<User> {
+  return apiFetch<User>("/auth/me/", { method: "PATCH", body: JSON.stringify(data) });
+}
+
+export async function changePassword(current_password: string, new_password: string) {
+  return apiFetch("/auth/change-password/", {
+    method: "POST",
+    body: JSON.stringify({ current_password, new_password }),
+  });
+}
+
+// ── Obligations ───────────────────────────────────────────────────────────────
+
+export interface Obligation {
+  id: string;
+  obligation_type: string;
+  event: string | null;
+  event_description: string | null;
+  amount_cents: number;
+  paid_cents: number;
+  outstanding_cents: number;
+  due_date: string;
+  status: string;
+  waiver_reason: string;
+}
+
+export interface PaginatedResponse<T> {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+}
+
+export async function getMyObligations(params?: Record<string, string>): Promise<Obligation[]> {
+  const qs = params ? "?" + new URLSearchParams(params).toString() : "";
+  return apiFetch<Obligation[]>(`/me/obligations/${qs}`);
+}
+
+// ── Payments ──────────────────────────────────────────────────────────────────
+
+export interface Payment {
+  id: string;
+  amount_cents: number;
+  payment_date: string;
+  method: string;
+  reference: string;
+  applications: { obligation: string; applied_cents: number }[];
+  created_at: string;
+}
+
+export async function getMyPayments(): Promise<Payment[]> {
+  return apiFetch<Payment[]>("/me/payments/");
+}
+
+// ── Member balance ────────────────────────────────────────────────────────────
+
+export interface MemberBalance {
+  outstanding_cents: number;
+  ledger_balance_cents: number;
+  open_obligation_count: number;
+}
+
+export async function getMyBalance(): Promise<MemberBalance> {
+  return apiFetch<MemberBalance>("/me/balance/");
+}
+
+// ── PDF downloads ────────────────────────────────────────────────────────────
+
+async function apiFetchBlob(path: string): Promise<Blob> {
+  const token = getAccessToken();
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const res = await fetch(`${BASE_URL}${path}`, { headers });
+
+  if (res.status === 401) {
+    const newToken = await refreshAccessToken();
+    if (newToken) return apiFetchBlob(path);
+    throw new ApiError(401, "Session expired. Please log in again.");
+  }
+  if (!res.ok) {
+    throw new ApiError(res.status, `HTTP ${res.status}`);
+  }
+  return res.blob();
+}
+
+export async function downloadReceipt(paymentId: string): Promise<void> {
+  const blob = await apiFetchBlob(`/me/payments/${paymentId}/receipt/`);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `receipt-${paymentId.slice(0, 8)}.pdf`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export async function downloadStatement(): Promise<void> {
+  const blob = await apiFetchBlob("/me/statement/");
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "statement.pdf";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+
+export interface DashboardData {
+  outstanding_cents: number;
+  active_events: number;
+  pending_approval_events: number;
+  reconciliation_review_queue: number;
+  payments_last_30_days_cents: number;
+  active_members: number;
+}
+
+export async function getDashboard(): Promise<DashboardData> {
+  return apiFetch<DashboardData>("/reports/dashboard/");
+}
+
+// ── Members ───────────────────────────────────────────────────────────────────
+
+export interface Member {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  phone_whatsapp: string;
+  address: string;
+  preferred_language: string;
+}
+
+export async function getMemberProfile(id: string): Promise<Member> {
+  return apiFetch<Member>(`/members/${id}/`);
+}
+
+export async function updateMemberProfile(id: string, data: Partial<Member>): Promise<Member> {
+  return apiFetch<Member>(`/members/${id}/`, { method: "PATCH", body: JSON.stringify(data) });
+}
