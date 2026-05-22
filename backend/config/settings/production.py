@@ -1,14 +1,17 @@
 from .base import *
+from decouple import config
 
-DEBUG = False
+DEBUG = config("DEBUG", default=False, cast=bool)
 
-SECURE_SSL_REDIRECT = True
+_secure = not DEBUG
+
+SECURE_SSL_REDIRECT = _secure
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-SECURE_HSTS_SECONDS = 31536000
-SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-SECURE_HSTS_PRELOAD = True
-SESSION_COOKIE_SECURE = True
-CSRF_COOKIE_SECURE = True
+SECURE_HSTS_SECONDS = 31536000 if _secure else 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = _secure
+SECURE_HSTS_PRELOAD = _secure
+SESSION_COOKIE_SECURE = _secure
+CSRF_COOKIE_SECURE = _secure
 
 CORS_ALLOWED_ORIGINS = config("CORS_ALLOWED_ORIGINS", default="", cast=Csv())
 
