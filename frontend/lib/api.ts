@@ -262,6 +262,30 @@ export interface Member {
   preferred_language: string;
 }
 
+// ── AI Assistant ──────────────────────────────────────────────────────────────
+
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface ChatResponse {
+  response: string;
+}
+
+export async function sendChatMessage(
+  message: string,
+  history: ChatMessage[]
+): Promise<string> {
+  const data = await apiFetch<ChatResponse>("/me/chat/", {
+    method: "POST",
+    body: JSON.stringify({ message, history }),
+  });
+  return data.response;
+}
+
+// ── Members ───────────────────────────────────────────────────────────────────
+
 export async function getMemberProfile(id: string): Promise<Member> {
   return apiFetch<Member>(`/members/${id}/`);
 }

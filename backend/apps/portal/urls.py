@@ -9,4 +9,5 @@ urlpatterns = [
     path("payments/", views.me_payments, name="me_payments"),
     path("payments/<uuid:payment_id>/receipt/", views.me_receipt, name="me_receipt"),
     path("statement/", views.me_statement, name="me_statement"),
+    path("chat/", views.me_chat, name="me_chat"),
 ]
