@@ -507,6 +507,20 @@ export async function adminObligations(
   return apiFetch<AdminPaginatedResponse<AdminObligation>>(`/admin/obligations/${qs}`);
 }
 
+export async function adminUpdateObligation(
+  id: string,
+  data: { amount_cents?: number; due_date?: string; status?: string; notes?: string }
+): Promise<AdminObligation> {
+  return apiFetch<AdminObligation>(`/admin/obligations/${id}/`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function adminDeleteObligation(id: string): Promise<void> {
+  await apiFetch<void>(`/admin/obligations/${id}/`, { method: "DELETE" });
+}
+
 export async function adminSendReminders(): Promise<{ queued: number; detail: string }> {
   return apiFetch<{ queued: number; detail: string }>("/admin/obligations/send-reminders/", {
     method: "POST",

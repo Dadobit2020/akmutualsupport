@@ -7,6 +7,7 @@ urlpatterns = [
     path("members/<uuid:member_id>/", views.member_detail, name="admin-member-detail"),
     path("payments/", views.payments_list, name="admin-payments-list"),
     path("obligations/", views.obligations_list, name="admin-obligations-list"),
+    path("obligations/<uuid:obligation_id>/", views.obligation_detail, name="admin-obligation-detail"),
     path("obligations/send-reminders/", views.send_reminders, name="admin-send-reminders"),
     path("events/", views.events_list, name="admin-events-list"),
     path("settings/", views.org_settings, name="admin-settings"),

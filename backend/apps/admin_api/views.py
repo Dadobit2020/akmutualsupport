@@ -422,6 +422,67 @@ def payments_list(request):
 
 # ── Obligations ───────────────────────────────────────────────────────────────
 
+@api_view(["PATCH", "DELETE"])
+@permission_classes(_ADMIN_PERMISSIONS)
+def obligation_detail(request, obligation_id):
+    org = request.organization
+    try:
+        ob = Obligation.objects.select_related("member").get(id=obligation_id, organization=org)
+    except Obligation.DoesNotExist:
+        return Response({"detail": "Not found."}, status=404)
+
+    if request.method == "DELETE":
+        if ob.paid_cents > 0:
+            return Response(
+                {"detail": "Cannot delete an obligation that has payments applied. Cancel it instead."},
+                status=400,
+            )
+        ob.delete()
+        return Response(status=204)
+
+    # PATCH — editable fields: amount_cents, due_date, status, notes
+    data = request.data
+    changed = []
+
+    if "amount_cents" in data:
+        new_amount = int(data["amount_cents"])
+        if new_amount < ob.paid_cents:
+            return Response(
+                {"detail": "Amount cannot be less than what has already been paid."},
+                status=400,
+            )
+        ob.amount_cents = new_amount
+        changed.append("amount_cents")
+
+    if "due_date" in data:
+        from datetime import date as _date
+        try:
+            ob.due_date = _date.fromisoformat(data["due_date"])
+            changed.append("due_date")
+        except ValueError:
+            return Response({"detail": "Invalid due_date format (use YYYY-MM-DD)."}, status=400)
+
+    if "status" in data:
+        allowed = [ObligationStatus.WAIVED, ObligationStatus.CANCELLED,
+                   ObligationStatus.OPEN, ObligationStatus.WRITTEN_OFF]
+        if data["status"] not in allowed:
+            return Response(
+                {"detail": f"Status must be one of: {[s for s in allowed]}."},
+                status=400,
+            )
+        ob.status = data["status"]
+        changed.append("status")
+
+    if "notes" in data:
+        ob.notes = data["notes"]
+        changed.append("notes")
+
+    if changed:
+        ob.save(update_fields=changed + ["updated_at"])
+
+    return Response(_serialize_obligation(ob))
+
+
 @api_view(["GET"])
 @permission_classes(_ADMIN_PERMISSIONS)
 def obligations_list(request):
