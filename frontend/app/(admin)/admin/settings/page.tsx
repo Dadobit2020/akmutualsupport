@@ -8,6 +8,7 @@ import {
   adminProcessAssessment,
   adminGenerateAnnualDues,
   adminBulkDeleteDues,
+  adminResetDuesDeadline,
   OrgSettings,
   AssessmentPreview,
   ApiError,
@@ -41,6 +42,13 @@ export default function SettingsPage() {
   const [duesDueDate, setDuesDueDate] = useState(`${new Date().getFullYear()}-12-31`);
   const [duesLoading, setDuesLoading] = useState(false);
   const [duesResult, setDuesResult] = useState("");
+
+  // Reset deadline
+  const [resetYear, setResetYear] = useState(String(new Date().getFullYear() - 1));
+  const [resetDate, setResetDate] = useState("");
+  const [resetAll, setResetAll] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetResult, setResetResult] = useState("");
 
   // Bulk delete dues
   const [deleteYear, setDeleteYear] = useState(String(new Date().getFullYear()));
@@ -110,6 +118,28 @@ export default function SettingsPage() {
       setDuesResult(err instanceof ApiError ? err.message : "Failed.");
     } finally {
       setDuesLoading(false);
+    }
+  }
+
+  async function handleResetDeadline() {
+    if (!resetDate) { setResetResult("Pick a new due date."); return; }
+    const yearLabel = resetAll ? "all years" : resetYear;
+    if (!confirm(
+      `Move the due date for ${yearLabel} unpaid dues to ${resetDate}?\n\n` +
+      `This also clears any accrued penalties so the 15% weekly clock restarts from the new date.`
+    )) return;
+    setResetLoading(true);
+    setResetResult("");
+    try {
+      const r = await adminResetDuesDeadline({
+        new_due_date: resetDate,
+        ...(resetAll ? {} : { year: parseInt(resetYear) }),
+      });
+      setResetResult(r.detail);
+    } catch (err) {
+      setResetResult(err instanceof ApiError ? err.message : "Failed.");
+    } finally {
+      setResetLoading(false);
     }
   }
 
@@ -339,6 +369,67 @@ export default function SettingsPage() {
               {deleteResult}
             </p>
           )}
+        </div>
+      </section>
+
+      {/* ── Reset Payment Deadline ── */}
+      <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+        <h2 className="text-base font-semibold text-gray-800 mb-1">Reset Payment Deadline</h2>
+        <p className="text-sm text-gray-500 mb-4">
+          Assign a new future due date to all unpaid dues obligations. Accrued penalties are cleared
+          so the late-penalty clock restarts from the new date. Use this to give members a fair
+          grace period on backdated or newly created obligations.
+        </p>
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Apply To</label>
+              <select
+                value={resetAll ? "all" : "year"}
+                onChange={(e) => setResetAll(e.target.value === "all")}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              >
+                <option value="year">Specific year</option>
+                <option value="all">All open dues (any year)</option>
+              </select>
+            </div>
+            {!resetAll && (
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Year</label>
+                <select
+                  value={resetYear}
+                  onChange={(e) => setResetYear(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                >
+                  {[2024, 2025, 2026].map((y) => <option key={y} value={y}>{y}</option>)}
+                </select>
+              </div>
+            )}
+            <div className={resetAll ? "sm:col-span-2" : ""}>
+              <label className="block text-xs font-medium text-gray-600 mb-1">New Due Date *</label>
+              <input
+                type="date"
+                value={resetDate}
+                min={new Date(Date.now() + 86400000).toISOString().split("T")[0]}
+                onChange={(e) => setResetDate(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleResetDeadline}
+              disabled={resetLoading || !resetDate}
+              className="bg-blue-600 text-white text-sm font-medium px-5 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            >
+              {resetLoading ? "Updating…" : "Set New Deadline"}
+            </button>
+            {resetResult && (
+              <p className={`text-sm ${resetResult.includes("Reset") ? "text-green-700" : "text-red-600"}`}>
+                {resetResult}
+              </p>
+            )}
+          </div>
         </div>
       </section>
 

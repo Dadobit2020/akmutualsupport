@@ -17,5 +17,6 @@ urlpatterns = [
     path("members/<uuid:member_id>/family/<uuid:fm_id>/", views.family_member_detail, name="admin-family-detail"),
     path("obligations/generate-annual-dues/", views.generate_annual_dues, name="admin-generate-dues"),
     path("obligations/bulk-delete-dues/", views.bulk_delete_dues, name="admin-bulk-delete-dues"),
+    path("obligations/reset-deadline/", views.reset_dues_deadline, name="admin-reset-deadline"),
     path("payouts/", views.payouts_list, name="admin-payouts"),
 ]

@@ -990,6 +990,62 @@ def bulk_delete_dues(request):
     })
 
 
+# ── Reset Dues Deadline ───────────────────────────────────────────────────────
+
+@api_view(["POST"])
+@permission_classes(_ADMIN_PERMISSIONS)
+def reset_dues_deadline(request):
+    """
+    Bulk-reset the due date on open/partially-paid DUES obligations.
+    Also clears any accrued penalties so the clock starts fresh from the new date.
+    Body: { new_due_date: "2026-07-31", year: 2025 (optional filter) }
+    """
+    org = request.organization
+    new_due_date_str = request.data.get("new_due_date", "")
+    year = request.data.get("year")  # optional — if omitted, applies to ALL open dues
+
+    try:
+        new_due_date = date.fromisoformat(new_due_date_str)
+    except (ValueError, TypeError):
+        return Response(
+            {"error": "Provide new_due_date in YYYY-MM-DD format."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if new_due_date <= date.today():
+        return Response(
+            {"error": "new_due_date must be a future date."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    qs = Obligation.objects.filter(
+        organization=org,
+        obligation_type=ObligationType.DUES,
+        status__in=[ObligationStatus.OPEN, ObligationStatus.PARTIALLY_PAID],
+    )
+    if year:
+        try:
+            qs = qs.filter(due_date__year=int(year))
+        except (ValueError, TypeError):
+            return Response({"error": "year must be an integer."}, status=status.HTTP_400_BAD_REQUEST)
+
+    count = qs.count()
+
+    with transaction.atomic():
+        qs.update(
+            due_date=new_due_date,
+            penalty_weeks_applied=0,
+            original_amount_cents=None,
+        )
+
+    return Response({
+        "ok": True,
+        "updated": count,
+        "new_due_date": str(new_due_date),
+        "detail": f"Reset {count} obligation(s) to due date {new_due_date}. Penalty clock restarted.",
+    })
+
+
 # ── Payout Recording ──────────────────────────────────────────────────────────
 
 @api_view(["GET", "POST"])

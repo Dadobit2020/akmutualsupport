@@ -593,6 +593,16 @@ export async function adminUpdateSettings(
   });
 }
 
+export async function adminResetDuesDeadline(data: {
+  new_due_date: string;
+  year?: number;
+}): Promise<{ ok: boolean; updated: number; new_due_date: string; detail: string }> {
+  return apiFetch("/admin/obligations/reset-deadline/", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
 export async function adminBulkDeleteDues(year: number): Promise<{
   ok: boolean;
   year: number;
