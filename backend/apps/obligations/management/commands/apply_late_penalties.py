@@ -89,8 +89,12 @@ class Command(BaseCommand):
             else:
                 stats["skipped"] += 1
 
-            # Suspension check
-            if days_overdue >= suspend_days:
+            # Suspension check — only suspend if the penalty system has been
+            # actively running for at least 12 weeks on this obligation.
+            # This prevents suspending everyone the first time the command runs
+            # on obligations that were already old when the feature was deployed.
+            weeks_of_penalty = ob.penalty_weeks_applied  # updated above
+            if days_overdue >= suspend_days and weeks_of_penalty >= 12:
                 member = ob.member
                 if member.status not in (MemberStatus.SUSPENDED, MemberStatus.LEFT, MemberStatus.DECEASED):
                     suspend_msg = (
