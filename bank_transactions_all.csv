@@ -1,0 +1,71 @@
+date,type,member_name,credit,debit,memo,description,reference,amount_cents
+2025-07-28,refund_out,Hana,0.0,200.0,Refund Previous Payment That You Made,Zelle to Hana on 07/28 Ref #Rp0Z3W6x4Q Refund Previous Payment That You Made,Rp0Z3W6x4Q,20000
+2025-08-18,member_payment,Daimo Abiy,200.0,0.0,,Zelle From Daimo Abiy on 08/17 Ref # Pp0Z5Y9Vkq,Pp0Z5Y9Vkq,20000
+2025-08-18,member_payment,Dangiso Zegeye,200.0,0.0,,Zelle From Dangiso Zegeye on 08/17 Ref # Pp0Z5Yc4Sr,Pp0Z5Yc4Sr,20000
+2025-08-19,member_payment,Martha Shabe,1.0,0.0,Marthas Donation,Zelle From Martha Shabe on 08/19 Ref # Fhc032950774 Marthas Donation,Fhc032950774,100
+2025-09-03,cash_deposit,,400.0,0.0,,Deposit Made In A Branch/Store,,40000
+2025-11-12,member_payment,Gebrehiwot Haftu,400.0,0.0,Belay,Zelle From Gebrehiwot Haftu on 11/11 Ref # Wfct0Zgyxnvj Belay,Wfct0Zgyxnvj,40000
+2025-11-14,member_payment,Kidist M Bambore,400.0,0.0,Makango Bambore Binyam Bambore,Zelle From Kidist M Bambore on 11/14 Ref # Key0Fbg15Jax Makango Bambore Binyam Bambore,Key0Fbg15Jax,40000
+2025-11-17,member_payment,Loba Ergeno,400.0,0.0,Asi and Loba,Zelle From Loba Ergeno on 11/17 Ref # Fhc034887946 Asi and Loba,Fhc034887946,40000
+2025-11-18,member_payment,Milkam Alemitu,200.0,0.0,for Addis Kidan Mutual Support,Zelle From Milkam Alemitu on 11/18 Ref # Wfct0Zhpkdn5 for Addis Kidan Mutual Support,Wfct0Zhpkdn5,20000
+2025-11-18,member_payment,Kebede Ergudo Erbelo,200.0,0.0,The Remaing 200 for Family Tseganesh Liran,Zelle From Kebede Ergudo Erbelo on 11/18 Ref # Jpm99Bv6Bdzl The Remaing 200 for Family Tseganesh Liran,200,20000
+2025-11-18,member_payment,Alazar Dessalegn,400.0,0.0,,Zelle From Alazar Dessalegn on 11/18 Ref # Key03BG11Jnn,Key03BG11Jnn,40000
+2025-11-19,member_payment,Amanuel Sidamo,400.0,0.0,Edir,Zelle From Amanuel Sidamo on 11/19 Ref # Bacdy1C0Jd3U Edir,Bacdy1C0Jd3U,40000
+2025-11-21,member_payment,Elsabet Beza,400.0,0.0,,Zelle From Elsabet Beza on 11/21 Ref # Cofychql8F64,Cofychql8F64,40000
+2025-11-24,member_payment,Wubshet A Gebremeskel,200.0,0.0,Bill,Zelle From Wubshet A Gebremeskel on 11/23 Ref # Jpm99Bvrwbut Bill,200,20000
+2025-11-24,member_payment,Demissew A Feleke,400.0,0.0,,Zelle From Demissew A Feleke on 11/23 Ref # Key0Xb61JJ4T,Key0Xb61JJ4T,40000
+2025-11-24,member_payment,Zewdu Wongelawit,200.0,0.0,,Zelle From Zewdu Wongelawit on 11/23 Ref # Wfct0Zj8C7Ty,Wfct0Zj8C7Ty,20000
+2025-11-24,member_payment,Bekelech Tsegaye Kebede,200.0,0.0,,Zelle From Bekelech Tsegaye Kebede on 11/23 Ref # Key0Ubx1Mjgt,200,20000
+2025-11-24,member_payment,Senait G Sema,400.0,0.0,,Zelle From Senait G Sema on 11/23 Ref # 0N802B61Ajkt,0N802B61Ajkt,40000
+2025-11-26,member_payment,Senait G Sema,200.0,0.0,,Zelle From Senait G Sema on 11/26 Ref # 0N809Bc1Nzya,0N809Bc1Nzya,20000
+2025-12-01,member_payment,Efrem Galcha,200.0,0.0,Payment,Zelle From Efrem Galcha on 11/30 Ref # Jpm99Bwknvna Payment,Jpm99Bwknvna,20000
+2025-12-03,member_payment,Sole Abrham,400.0,0.0,,Zelle From Sole Abrham on 12/03 Ref # Wfct0Zk9Fq98,Wfct0Zk9Fq98,40000
+2025-12-04,cash_deposit,,2800.0,0.0,,Deposit Made In A Branch/Store,,280000
+2025-12-23,member_payment,Boyoyo Bogale,200.0,0.0,,Zelle From Boyoyo Bogale on 12/23 Ref # Wfct0Zmhhm3W,Wfct0Zmhhm3W,20000
+2025-12-26,member_payment,Seyum Kebede,200.0,0.0,,Zelle From Seyum Kebede on 12/25 Ref # Key0Qbc13Z5O,Key0Qbc13Z5O,20000
+2025-12-29,member_payment,Guta Selamawit,400.0,0.0,Frita and Getch,Zelle From Guta Selamawit on 12/27 Ref # Wfct0Zmwszpv Frita and Getch,Wfct0Zmwszpv,40000
+2025-12-31,member_payment,Dangiso Zegeye,200.0,0.0,,Zelle From Dangiso Zegeye on 12/30 Ref # Wfct0Zn7F7T7,Wfct0Zn7F7T7,20000
+2025-12-31,member_payment,Samuel A Abadiga,200.0,0.0,Robel Samuel Ababiya,Zelle From Samuel A Abadiga on 12/31 Ref # Usbbz8Uozsm2 Robel Samuel Ababiya,Usbbz8Uozsm2,20000
+2025-12-31,cash_deposit,,400.0,0.0,,Deposit Made In A Branch/Store,,40000
+2025-12-31,member_payment,Haile Genet,200.0,0.0,Edit,Zelle From Haile Genet on 12/31 Ref # Wfct0Znbb23F Edit,Wfct0Znbb23F,20000
+2026-01-09,cash_deposit,,600.0,0.0,,Deposit Made In A Branch/Store,,60000
+2026-01-15,cash_deposit,,2000.0,0.0,,Deposit Made In A Branch/Store,,200000
+2026-01-20,member_payment,Bereket Fikrehiwot Welde,250.0,0.0,E,Zelle From Bereket Fikrehiwot Welde on 01/18 Ref # Jpm99C2Hkbcs E,250,25000
+2026-01-20,member_payment,Genet Kidane,50.0,0.0,Payment,Zelle From Genet Kidane on 01/18 Ref # Jpm99C2Ho63D Payment,Jpm99C2Ho63D,5000
+2026-01-20,member_payment,Sima Ayinalem,100.0,0.0,,Zelle From Sima Ayinalem on 01/18 Ref # Wfct0Zq48W98,Wfct0Zq48W98,10000
+2026-01-20,check_out,,0.0,170.78,,Harland Clarke Check/Acc. 011726 2Gwe635905057L8 Addis Kidan Mutual Sup,,17078
+2026-01-22,member_payment,Haile Genet,50.0,0.0,,Zelle From Haile Genet on 01/22 Ref # Wfct0Zqgxgs8,Wfct0Zqgxgs8,5000
+2026-01-23,member_payment,Dingato Melese,100.0,0.0,Yearly Maintenance,Zelle From Dingato Melese on 01/23 Ref # Wfct0Zqlwdx7 Yearly Maintenance,Wfct0Zqlwdx7,10000
+2026-01-26,member_payment,Sole Abrham,100.0,0.0,Addis Kidan Mutual Support,Zelle From Sole Abrham on 01/24 Ref # Wfct0Zqnm8L8 Addis Kidan Mutual Support,Wfct0Zqnm8L8,10000
+2026-01-28,member_payment,Galcha Tseganesh,100.0,0.0,Yearly,Zelle From Galcha Tseganesh on 01/28 Ref # Wfct0Zqzlyvp Yearly,Wfct0Zqzlyvp,10000
+2026-01-28,member_payment,Boyoyo Bogale,200.0,0.0,,Zelle From Boyoyo Bogale on 01/28 Ref # Wfct0Zr2G3N2,Wfct0Zr2G3N2,20000
+2026-01-29,member_payment,Woldemichael Beletech,150.0,0.0,,Zelle From Woldemichael Beletech on 01/28 Ref # Wfct0Zr3S54R,150,15000
+2026-01-30,member_payment,Dejene Tsegaye,100.0,0.0,,Zelle From Dejene Tsegaye on 01/29 Ref # Wfct0Zr72Byv,Wfct0Zr72Byv,10000
+2026-02-02,member_payment,Wondwosen Tesfaye Betela,400.0,0.0,Payment,Zelle From Wondwosen Tesfaye Betela on 01/31 Ref # Jpm99C3Xzmgg Payment,400,40000
+2026-02-02,member_payment,Mulemebet Lambebo,350.0,0.0,Asfaw Kuture and Muluemebet Lambebo,Zelle From Mulemebet Lambebo on 02/02 Ref # Fhc036487058 Asfaw Kuture and Muluemebet Lambebo,350,35000
+2026-02-02,member_payment,Shuiwe Hurube,100.0,0.0,Yearly Contributions,Zelle From Shuiwe Hurube on 02/02 Ref # Wfct0Zrnx9Rm Yearly Contributions,Wfct0Zrnx9Rm,10000
+2026-02-04,tithe_ly,Tithe.ly Batch,6917.5,0.0,,Tithe.Ly Tithe.Ly St-E0V7K2R0F4N7 Addis Kidan Mutual Sup,,691750
+2026-02-05,member_payment,Demissew A Feleke,100.0,0.0,,Zelle From Demissew A Feleke on 02/05 Ref # Key0Hb51Okws,Key0Hb51Okws,10000
+2026-02-09,check_out,,0.0,15000.0,,Check,,1500000
+2026-02-11,tithe_ly,Tithe.ly Batch,400.0,0.0,,Tithe.Ly Tithe.Ly St-T4D9B5S3T0C6 Addis Kidan Mutual Sup,,40000
+2026-02-17,member_payment,Selam A Ayele,100.0,0.0,Selam Ayele Wondu Mohammed Annual Mutual P,Zelle From Selam A Ayele on 02/15 Ref # Key04Bj16Yqe Selam Ayele Wondu Mohammed Annual Mutual P,Key04Bj16Yqe,10000
+2026-02-19,cash_deposit,,1750.0,0.0,,Deposit Made In A Branch/Store,,175000
+2026-02-25,tithe_ly,Tithe.ly Batch,1045.27,0.0,,Tithe.Ly Tithe.Ly St-Y9N2K3G6O5W7 Addis Kidan Mutual Sup,,104527
+2026-02-25,member_payment,Fantaye M Habtemariam,100.0,0.0,Yearly Payment,Zelle From Fantaye M Habtemariam on 02/25 Ref # Usbibhfrjiii Yearly Payment,Usbibhfrjiii,10000
+2026-03-02,member_payment,Anjelo Eyob,0.0,50.0,Yearly Mutual Support Fee,Zelle From Anjelo Eyob on 02/28 Ref # Wfct0Zvhlt49 Yearly Mutual Support Fee,Wfct0Zvhlt49,5000
+2026-03-02,member_payment,Milkam Alemitu,0.0,50.0,Addis Kidan Mutual Support Yearly Fee,Zelle From Milkam Alemitu on 02/28 Ref # Wfct0Zvhmtpl Addis Kidan Mutual Support Yearly Fee,Wfct0Zvhmtpl,5000
+2026-03-02,member_payment,Sima Ayinalem,300.0,0.0,,Zelle From Sima Ayinalem on 03/01 Ref # Wfct0Zvlrkq2,Wfct0Zvlrkq2,30000
+2026-03-04,tithe_ly,Tithe.ly Batch,200.0,0.0,,Tithe.Ly Tithe.Ly St-Y6V1B2A5T7H0 Addis Kidan Mutual Sup,,20000
+2026-03-04,member_payment,Butta Esayas,100.0,0.0,Annual Payment for Esayas Butta and Eyerus,Zelle From Butta Esayas on 03/04 Ref # Wfct0Zvxj38G Annual Payment for Esayas Butta and Eyerus,Wfct0Zvxj38G,10000
+2026-03-09,member_payment,Teka Assamo Choramo,0.0,100.0,Annual Fee for Teka Choramo Belaynesh Dil,Zelle From Teka Assamo Choramo on 03/08 Ref # Jpm99C8Gx1Nn Annual Fee for Teka Choramo Belaynesh Dil,100,10000
+2026-03-11,tithe_ly,Tithe.ly Batch,300.0,0.0,,Tithe.Ly Tithe.Ly St-R5L9E2B4W9G6 Addis Kidan Mutual Sup,,30000
+2026-03-13,member_payment,Asebo Abiy,300.0,0.0,,Zelle From Asebo Abiy on 03/13 Ref # Wfct0Zwzqpn5,Wfct0Zwzqpn5,30000
+2026-03-19,cash_deposit,,500.0,0.0,,Deposit Made In A Branch/Store,,50000
+2026-03-30,member_payment,Gamo Abeselom,0.0,100.0,Annual Fee,Zelle From Gamo Abeselom on 03/29 Ref # Wfct0Zyrpk94 Annual Fee,Wfct0Zyrpk94,10000
+2026-03-30,member_payment,Anjulo Alemitu,50.0,0.0,Eder,Zelle From Anjulo Alemitu on 03/29 Ref # Wfct0Zyrppnc Eder,Wfct0Zyrppnc,5000
+2026-04-01,tithe_ly,Tithe.ly Batch,96.95,0.0,,Tithe.Ly Tithe.Ly St-H8H6I7K5H8S9 Addis Kidan Mutual Sup,,9695
+2026-04-02,member_payment,Elsabet Beza,100.0,0.0,for Elsabet and My Husband Yared,Zelle From Elsabet Beza on 04/02 Ref # Cofl3Ib7Orq6 for Elsabet and My Husband Yared,Cofl3Ib7Orq6,10000
+2026-04-15,tithe_ly,Tithe.ly Batch,100.0,0.0,,Tithe.Ly Tithe.Ly St-I8L0N8R7Y0F0 Addis Kidan Mutual Sup,,10000
+2026-04-22,cash_deposit,,150.0,0.0,,Deposit Made In A Branch/Store,,15000
+2026-05-23,refund_out,Senait Sema,0,600.0,Refund for Mulu Hagos 200 Fikre Dante 200 Ermias Getachew 200,Zelle To Senait Sema Ref #WFCT1273DZHS,WFCT1273DZHS,60000
+2026-05-23,refund_out,Elsabeth Gebertansaye,0,400.0,Refund for payment made by mistake,Zelle To Elsabth Gebretinsae Ref #WFCT1272DR5T,WFCT1272DR5T,40000
