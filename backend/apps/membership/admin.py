@@ -1,7 +1,6 @@
 from django.contrib import admin
-from import_export import resources, fields
+from import_export import resources
 from import_export.admin import ImportExportModelAdmin
-from import_export.widgets import DateWidget, CharWidget
 from .models import Member, Household, ContributionRule, HouseholdMembershipHistory
 
 
@@ -21,7 +20,7 @@ class MemberResource(resources.ModelResource):
         export_order = fields
         import_id_fields = ["first_name", "last_name", "join_date"]
         widgets = {
-            "join_date": {"widget": DateWidget, "format": "%Y-%m-%d"},
+            "join_date": {"format": "%Y-%m-%d"},
         }
 
     def before_import_row(self, row, row_number=None, **kwargs):
