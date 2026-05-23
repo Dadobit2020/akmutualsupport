@@ -1,14 +1,20 @@
 from django.contrib import admin
-from import_export import resources
+from import_export import resources, fields
 from import_export.admin import ImportExportModelAdmin
+from import_export.widgets import DateWidget
 from .models import Member, Household, ContributionRule, HouseholdMembershipHistory
 
 
 class MemberResource(resources.ModelResource):
-    """
-    Defines how Member rows are serialised for import/export.
-    The organization FK is injected from the request in MemberAdmin.get_export_resource_kwargs.
-    """
+    """Defines how Member rows are serialised for import/export via the admin."""
+
+    # Declare join_date explicitly so we control the widget — avoids the
+    # django-import-export 4.x Meta.widgets kwarg injection bug.
+    join_date = fields.Field(
+        attribute="join_date",
+        column_name="join_date",
+        widget=DateWidget(format="%Y-%m-%d"),
+    )
 
     class Meta:
         model = Member
@@ -19,9 +25,6 @@ class MemberResource(resources.ModelResource):
         )
         export_order = fields
         import_id_fields = ["first_name", "last_name", "join_date"]
-        widgets = {
-            "join_date": {"format": "%Y-%m-%d"},
-        }
 
     def before_import_row(self, row, row_number=None, **kwargs):
         if not row.get("status"):
@@ -75,20 +78,6 @@ class MemberAdmin(ImportExportModelAdmin):
         ("Notes", {"fields": ("notes",)}),
         ("Timestamps", {"fields": ("created_at", "updated_at")}),
     )
-
-    def get_export_resource_kwargs(self, request, **kwargs):
-        """Inject org into the resource so before_import_row can set it."""
-        kwargs = super().get_export_resource_kwargs(request, **kwargs)
-        return kwargs
-
-    def get_import_resource_kwargs(self, request, **kwargs):
-        kwargs = super().get_import_resource_kwargs(request, **kwargs)
-        return kwargs
-
-    def get_import_data_kwargs(self, request, *args, **kwargs):
-        """Pass the current org to the resource before import rows are processed."""
-        result = super().get_import_data_kwargs(request, *args, **kwargs)
-        return result
 
     def process_import(self, request, *args, **kwargs):
         """Attach org to all resource instances before processing."""
