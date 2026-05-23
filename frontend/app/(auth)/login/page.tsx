@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { login, saveTokens, ApiError } from "@/lib/api";
@@ -56,7 +57,17 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center px-4 bg-gray-50">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-green-800">Addis Kidan</h1>
+          <div className="flex justify-center mb-3">
+            <Image
+              src="/logo.png"
+              alt="AKMSA"
+              width={72}
+              height={72}
+              className="rounded-full object-contain"
+              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+            />
+          </div>
+          <h1 className="text-2xl font-bold text-green-800">AKMSA</h1>
           <p className="text-sm text-gray-500 mt-1">Member Portal</p>
         </div>
 

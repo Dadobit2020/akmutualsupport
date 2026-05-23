@@ -6,8 +6,8 @@ import { AuthProvider } from "@/lib/auth-context";
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist" });
 
 export const metadata: Metadata = {
-  title: "Addis Kidan Member Portal",
-  description: "Addis Kidan Mutual Support Association",
+  title: "AKMSA Portal",
+  description: "Addis Kidan Mutual Support Association Member Portal",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

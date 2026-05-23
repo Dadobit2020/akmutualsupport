@@ -31,7 +31,7 @@ export function Nav() {
               className="rounded-full object-contain"
               onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
             />
-            <span className="font-bold text-green-800 text-lg tracking-tight">Addis Kidan</span>
+            <span className="font-bold text-green-800 text-lg tracking-tight">AKMSA</span>
           </Link>
           <nav className="hidden sm:flex items-center gap-1">
             {NAV_LINKS.map((link) => (
