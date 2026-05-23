@@ -64,7 +64,7 @@ class Command(BaseCommand):
         # Get system user (admin) for ledger attribution
         User = get_user_model()
         try:
-            system_user = User.objects.filter(is_superuser=True).order_by("date_joined").first()
+            system_user = User.objects.filter(is_superuser=True).order_by("created_at").first()
             if not system_user:
                 raise CommandError("No superuser found. Create one first with createsuperuser.")
         except Exception as e:
