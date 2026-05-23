@@ -97,6 +97,8 @@ def _serialize_obligation(o):
         "due_date": str(o.due_date),
         "status": o.status,
         "event_id": str(o.event_id) if o.event_id else None,
+        "penalty_weeks_applied": o.penalty_weeks_applied,
+        "original_amount_cents": o.original_amount_cents,
     }
 
 
@@ -641,6 +643,8 @@ def org_settings(request):
             "maintenance_fee_cents": settings_obj.maintenance_fee_cents,
             "maintenance_fee_anchor_month": settings_obj.maintenance_fee_anchor_month,
             "assessment_due_days": settings_obj.assessment_due_days,
+            "late_penalty_pct": settings_obj.late_penalty_pct,
+            "suspension_after_days": settings_obj.suspension_after_days,
             "active_member_count": active_count,
             "audit_log": [
                 {
@@ -660,6 +664,8 @@ def org_settings(request):
         "maintenance_fee_cents": int,
         "maintenance_fee_anchor_month": int,
         "assessment_due_days": int,
+        "late_penalty_pct": int,
+        "suspension_after_days": int,
     }
     logs = []
     errors = {}
@@ -928,6 +934,59 @@ def generate_annual_dues(request):
         "amount_cents": amount_cents,
         "due_date": str(due_date),
         "description": description,
+    })
+
+
+# ── Bulk Delete Dues ──────────────────────────────────────────────────────────
+
+@api_view(["POST"])
+@permission_classes(_ADMIN_PERMISSIONS)
+def bulk_delete_dues(request):
+    """
+    Delete all DUES obligations for a given year (and optional obligation_type filter).
+    Only deletes obligations with paid_cents == 0. Partially/fully paid obligations are skipped.
+    Body: { year: 2025, confirm: true }
+    """
+    org = request.organization
+    year = request.data.get("year")
+    confirm = request.data.get("confirm", False)
+
+    if not year or not confirm:
+        return Response(
+            {"error": "Provide year and confirm=true."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        year = int(year)
+    except (ValueError, TypeError):
+        return Response({"error": "year must be an integer."}, status=status.HTTP_400_BAD_REQUEST)
+
+    qs = Obligation.objects.filter(
+        organization=org,
+        obligation_type=ObligationType.DUES,
+        due_date__year=year,
+    )
+    total = qs.count()
+    # Only delete obligations with no payments applied
+    deletable = qs.filter(paid_cents=0, status__in=[
+        ObligationStatus.OPEN, ObligationStatus.CANCELLED,
+    ])
+    skipped = total - deletable.count()
+    deleted_count = deletable.count()
+
+    with transaction.atomic():
+        deletable.delete()
+
+    return Response({
+        "ok": True,
+        "year": year,
+        "deleted": deleted_count,
+        "skipped_paid": skipped,
+        "detail": (
+            f"Deleted {deleted_count} obligation(s) for {year}."
+            + (f" Skipped {skipped} with payments applied." if skipped else "")
+        ),
     })
 
 

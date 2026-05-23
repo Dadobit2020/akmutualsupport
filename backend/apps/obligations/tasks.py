@@ -173,6 +173,13 @@ def send_obligation_reminders(organization_id: str):
     logger.info(f"Queued {sent} reminder emails for org {org.slug}")
 
 
+@shared_task
+def run_apply_late_penalties():
+    """Daily task: apply weekly late penalties and suspend members past 90 days."""
+    from django.core.management import call_command
+    call_command("apply_late_penalties")
+
+
 def _default_reminder_body(ctx: dict) -> str:
     return (
         f"Dear {ctx['member_name']},\n\n"

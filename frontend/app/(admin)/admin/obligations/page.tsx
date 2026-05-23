@@ -323,7 +323,14 @@ export default function ObligationsPage() {
                     new Date(o.due_date) < new Date();
                   return (
                     <tr key={o.id} className="hover:bg-gray-50">
-                      <td className="px-5 py-3 font-medium text-gray-900">{o.member_name}</td>
+                      <td className="px-5 py-3 font-medium text-gray-900">
+                        {o.member_name}
+                        {o.penalty_weeks_applied > 0 && (
+                          <span className="ml-2 text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-medium">
+                            +{o.penalty_weeks_applied}wk penalty
+                          </span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-gray-500 capitalize">{o.obligation_type}</td>
                       <td className="px-4 py-3 text-right text-gray-700">{formatMoney(o.amount_cents)}</td>
                       <td className="px-4 py-3 text-right text-green-700">{formatMoney(o.paid_cents)}</td>

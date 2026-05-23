@@ -45,6 +45,9 @@ class Obligation(OrganizationScopedModel):
     status = models.CharField(max_length=15, choices=ObligationStatus.choices, default=ObligationStatus.OPEN, db_index=True)
     waiver_reason = models.TextField(blank=True)
     notes = models.TextField(blank=True)
+    # Late penalty tracking
+    original_amount_cents = models.PositiveIntegerField(null=True, blank=True)
+    penalty_weeks_applied = models.PositiveSmallIntegerField(default=0)
 
     class Meta:
         db_table = "obligation"

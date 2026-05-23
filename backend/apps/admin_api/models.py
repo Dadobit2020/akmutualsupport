@@ -11,6 +11,9 @@ class OrgSettings(models.Model):
     maintenance_fee_cents = models.PositiveIntegerField(default=5000)
     maintenance_fee_anchor_month = models.PositiveSmallIntegerField(default=1)
     assessment_due_days = models.PositiveSmallIntegerField(default=30)
+    # Late penalty policy
+    late_penalty_pct = models.PositiveSmallIntegerField(default=15)
+    suspension_after_days = models.PositiveSmallIntegerField(default=90)
     updated_at = models.DateTimeField(auto_now=True)
     updated_by = models.ForeignKey(
         "identity.User",

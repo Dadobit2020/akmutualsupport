@@ -419,6 +419,8 @@ export interface AdminObligation {
   due_date: string;
   status: string;
   event_id: string | null;
+  penalty_weeks_applied: number;
+  original_amount_cents: number | null;
 }
 
 export interface AdminEvent {
@@ -556,6 +558,8 @@ export interface OrgSettings {
   maintenance_fee_cents: number;
   maintenance_fee_anchor_month: number;
   assessment_due_days: number;
+  late_penalty_pct: number;
+  suspension_after_days: number;
   active_member_count: number;
   audit_log: {
     field: string;
@@ -578,11 +582,27 @@ export async function adminGetSettings(): Promise<OrgSettings> {
 }
 
 export async function adminUpdateSettings(
-  data: Partial<Pick<OrgSettings, "entrance_fee_cents" | "maintenance_fee_cents" | "maintenance_fee_anchor_month" | "assessment_due_days">>
+  data: Partial<Pick<OrgSettings,
+    "entrance_fee_cents" | "maintenance_fee_cents" | "maintenance_fee_anchor_month" |
+    "assessment_due_days" | "late_penalty_pct" | "suspension_after_days"
+  >>
 ): Promise<{ ok: boolean }> {
   return apiFetch<{ ok: boolean }>("/admin/settings/", {
     method: "PATCH",
     body: JSON.stringify(data),
+  });
+}
+
+export async function adminBulkDeleteDues(year: number): Promise<{
+  ok: boolean;
+  year: number;
+  deleted: number;
+  skipped_paid: number;
+  detail: string;
+}> {
+  return apiFetch("/admin/obligations/bulk-delete-dues/", {
+    method: "POST",
+    body: JSON.stringify({ year, confirm: true }),
   });
 }
 

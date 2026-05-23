@@ -156,6 +156,14 @@ CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 
+from celery.schedules import crontab
+CELERY_BEAT_SCHEDULE = {
+    "apply-late-penalties-daily": {
+        "task": "apps.obligations.tasks.run_apply_late_penalties",
+        "schedule": crontab(hour=6, minute=0),  # 6 AM UTC daily
+    },
+}
+
 # DRF
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
