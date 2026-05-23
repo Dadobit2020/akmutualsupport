@@ -8,10 +8,10 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
 const NAV_LINKS = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/obligations", label: "Contributions" },
-  { href: "/chat", label: "Assistant" },
-  { href: "/profile", label: "Profile" },
+  { href: "/dashboard", label: "Home", mobileLabel: "Home" },
+  { href: "/obligations", label: "Contributions", mobileLabel: "Contribute" },
+  { href: "/chat", label: "Assistant", mobileLabel: "Assistant" },
+  { href: "/profile", label: "Profile", mobileLabel: "Profile" },
 ];
 
 export function Nav() {
@@ -66,11 +66,11 @@ export function Nav() {
             key={link.href}
             href={link.href}
             className={cn(
-              "flex-1 text-center py-2 text-xs font-medium",
+              "flex-1 text-center py-2 text-[11px] font-medium",
               pathname === link.href ? "text-green-800 border-b-2 border-green-700" : "text-gray-500"
             )}
           >
-            {link.label}
+            {link.mobileLabel}
           </Link>
         ))}
       </nav>
