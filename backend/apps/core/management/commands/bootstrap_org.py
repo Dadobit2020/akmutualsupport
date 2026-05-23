@@ -97,6 +97,62 @@ class Command(BaseCommand):
                     "— Addis Kidan Administration"
                 ),
             },
+            # ── SMS templates ──────────────────────────────────────────────────
+            {
+                "name": "sms_welcome",
+                "channel": CommunicationChannel.SMS,
+                "subject": "",
+                "body_en": (
+                    "Hi {{member_name}}, welcome to Addis Kidan! "
+                    "Your account is ready. Check your email to set your password "
+                    "and access the member portal."
+                ),
+                "body_am": (
+                    "ሰላም {{member_name}}, ወደ አዲስ ቅዳን እንኳን ደህና መጡ! "
+                    "መለያዎ ተዘጋጅቷል። ኢሜይልዎን ይፈትሹ።"
+                ),
+            },
+            {
+                "name": "sms_obligation_reminder",
+                "channel": CommunicationChannel.SMS,
+                "subject": "",
+                "body_en": (
+                    "Addis Kidan: Hi {{member_name}}, your contribution of {{amount_due}} "
+                    "for {{event}} is due on {{due_date}}. "
+                    "Pay online at {{portal_url}} or contact us."
+                ),
+                "body_am": (
+                    "አዲስ ቅዳን: {{member_name}}, {{amount_due}} ክፍያ ለ{{event}} "
+                    "{{due_date}} ይደርሳል። ፖርታሉን ይጎብኙ።"
+                ),
+            },
+            {
+                "name": "sms_payment_confirmation",
+                "channel": CommunicationChannel.SMS,
+                "subject": "",
+                "body_en": (
+                    "Addis Kidan: Payment of {{amount}} received on {{date}}. "
+                    "Thank you, {{member_name}}! View your account at {{portal_url}}"
+                ),
+                "body_am": (
+                    "አዲስ ቅዳን: {{amount}} ክፍያ {{date}} ተቀብለናል። "
+                    "አመሰግናለሁ {{member_name}}!"
+                ),
+            },
+            {
+                "name": "sms_event_announcement",
+                "channel": CommunicationChannel.SMS,
+                "subject": "",
+                "body_en": (
+                    "Addis Kidan: A {{event_type}} event has been recorded for {{household_name}}. "
+                    "Your contribution of {{amount_due}} is due by {{due_date}}. "
+                    "Log in at {{portal_url}}"
+                ),
+                "body_am": (
+                    "አዲስ ቅዳን: {{household_name}} {{event_type}} ክስተት ተመዝግቧል። "
+                    "{{amount_due}} ክፍያ {{due_date}} ይደርሳል።"
+                ),
+            },
         ]
         for t in templates:
             obj, created = MessageTemplate.objects.get_or_create(
