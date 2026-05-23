@@ -802,3 +802,158 @@ def family_member_detail(request, member_id, fm_id):
 
     fm.save()
     return Response(_serialize_family_member(fm))
+
+
+# ── Annual Dues Generation ────────────────────────────────────────────────────
+
+@api_view(["POST"])
+@permission_classes(_ADMIN_PERMISSIONS)
+def generate_annual_dues(request):
+    """
+    Bulk-create fixed annual dues obligations for all active members.
+    Skips members who already have a DUES obligation due in the given year.
+    """
+    org = request.organization
+    try:
+        year = int(request.data.get("year", 0))
+        amount_cents = int(request.data.get("amount_cents", 0))
+        due_date_str = request.data.get("due_date", "")
+        due_date = date.fromisoformat(due_date_str)
+    except (ValueError, TypeError):
+        return Response(
+            {"error": "Provide valid year (int), amount_cents (int), due_date (YYYY-MM-DD)."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if amount_cents <= 0:
+        return Response({"error": "amount_cents must be positive."}, status=status.HTTP_400_BAD_REQUEST)
+    if year < 2000 or year > 2100:
+        return Response({"error": "Invalid year."}, status=status.HTTP_400_BAD_REQUEST)
+
+    description = f"{year} Annual Maintenance Fee"
+
+    active_members = list(Member.objects.filter(organization=org, status=MemberStatus.ACTIVE))
+
+    # Members who already have a dues obligation for this year
+    already_billed = set(
+        Obligation.objects.filter(
+            organization=org,
+            obligation_type=ObligationType.DUES,
+            due_date__year=year,
+        ).values_list("member_id", flat=True)
+    )
+
+    to_create = [m for m in active_members if m.id not in already_billed]
+
+    with transaction.atomic():
+        Obligation.objects.bulk_create([
+            Obligation(
+                organization=org,
+                member=member,
+                obligation_type=ObligationType.DUES,
+                amount_cents=amount_cents,
+                due_date=due_date,
+                status=ObligationStatus.OPEN,
+                notes=description,
+            )
+            for member in to_create
+        ])
+
+    return Response({
+        "ok": True,
+        "created": len(to_create),
+        "skipped": len(already_billed),
+        "year": year,
+        "amount_cents": amount_cents,
+        "due_date": str(due_date),
+        "description": description,
+    })
+
+
+# ── Payout Recording ──────────────────────────────────────────────────────────
+
+@api_view(["GET", "POST"])
+@permission_classes(_ADMIN_PERMISSIONS)
+def payouts_list(request):
+    """Record or list outgoing payouts (DR PAYOUT_EXP / CR CASH)."""
+    org = request.organization
+
+    if request.method == "GET":
+        from apps.ledger.models import LedgerTransaction
+        qs = LedgerTransaction.objects.filter(
+            organization=org,
+            source=TransactionSource.PAYOUT,
+        ).order_by("-transaction_date")[:50]
+        return Response([
+            {
+                "id": str(t.id),
+                "description": t.description,
+                "transaction_date": str(t.transaction_date),
+                "amount_cents": t.entries.filter(debit_cents__gt=0).aggregate(
+                    s=Sum("debit_cents")
+                )["s"] or 0,
+                "notes": t.notes,
+            }
+            for t in qs
+        ])
+
+    # POST — record a new payout
+    try:
+        amount_cents = int(request.data.get("amount_cents", 0))
+        payout_date = date.fromisoformat(request.data.get("payout_date", ""))
+    except (ValueError, TypeError):
+        return Response(
+            {"error": "Provide valid amount_cents (int) and payout_date (YYYY-MM-DD)."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if amount_cents <= 0:
+        return Response({"error": "amount_cents must be positive."}, status=status.HTTP_400_BAD_REQUEST)
+
+    description = request.data.get("description", "").strip() or "Event Payout"
+    reference = request.data.get("reference", "").strip()
+    notes = request.data.get("notes", "").strip()
+
+    try:
+        cash_account = LedgerAccount.objects.get(organization=org, code="CASH")
+        payout_account = LedgerAccount.objects.get(organization=org, code="PAYOUT_EXP")
+    except LedgerAccount.DoesNotExist as exc:
+        return Response(
+            {"error": f"Ledger account missing: {exc}. Run bootstrap_org first."},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    with transaction.atomic():
+        txn = LedgerTransaction.objects.create(
+            organization=org,
+            description=description,
+            transaction_date=payout_date,
+            source=TransactionSource.PAYOUT,
+            posted_by=request.user,
+            notes=f"{notes} Ref: {reference}".strip(" Ref:").strip() if reference else notes,
+        )
+        # DR PAYOUT_EXP (expense increases)
+        LedgerEntry.objects.create(
+            ledger_transaction=txn,
+            account=payout_account,
+            debit_cents=amount_cents,
+            credit_cents=0,
+            description=description,
+        )
+        # CR CASH (cash decreases)
+        LedgerEntry.objects.create(
+            ledger_transaction=txn,
+            account=cash_account,
+            debit_cents=0,
+            credit_cents=amount_cents,
+            description=f"Payout disbursed — {reference}" if reference else description,
+        )
+
+    return Response({
+        "ok": True,
+        "transaction_id": str(txn.id),
+        "amount_cents": amount_cents,
+        "payout_date": str(payout_date),
+        "description": description,
+        "reference": reference,
+    }, status=status.HTTP_201_CREATED)

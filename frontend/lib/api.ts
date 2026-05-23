@@ -587,3 +587,41 @@ export async function adminProcessAssessment(data: {
     body: JSON.stringify(data),
   });
 }
+
+// ── Annual Dues & Payouts ─────────────────────────────────────────────────────
+
+export async function adminGenerateAnnualDues(data: {
+  year: number;
+  amount_cents: number;
+  due_date: string;
+}): Promise<{ ok: boolean; created: number; skipped: number; year: number; amount_cents: number; due_date: string }> {
+  return apiFetch("/admin/obligations/generate-annual-dues/", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export interface Payout {
+  id: string;
+  description: string;
+  transaction_date: string;
+  amount_cents: number;
+  notes: string;
+}
+
+export async function adminGetPayouts(): Promise<Payout[]> {
+  return apiFetch<Payout[]>("/admin/payouts/");
+}
+
+export async function adminRecordPayout(data: {
+  amount_cents: number;
+  payout_date: string;
+  description: string;
+  reference?: string;
+  notes?: string;
+}): Promise<{ ok: boolean; transaction_id: string; amount_cents: number; payout_date: string }> {
+  return apiFetch("/admin/payouts/", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}

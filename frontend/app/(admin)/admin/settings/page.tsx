@@ -6,6 +6,7 @@ import {
   adminUpdateSettings,
   adminAssessmentPreview,
   adminProcessAssessment,
+  adminGenerateAnnualDues,
   OrgSettings,
   AssessmentPreview,
   ApiError,
@@ -29,6 +30,13 @@ export default function SettingsPage() {
   const [anchorMonth, setAnchorMonth] = useState("1");
   const [dueDays, setDueDays] = useState("30");
 
+  // Annual dues
+  const [duesYear, setDuesYear] = useState(String(new Date().getFullYear()));
+  const [duesAmount, setDuesAmount] = useState("");
+  const [duesDueDate, setDuesDueDate] = useState(`${new Date().getFullYear()}-12-31`);
+  const [duesLoading, setDuesLoading] = useState(false);
+  const [duesResult, setDuesResult] = useState("");
+
   // Assessment calculator
   const [payoutAmount, setPayoutAmount] = useState("");
   const [preview, setPreview] = useState<AssessmentPreview | null>(null);
@@ -45,6 +53,7 @@ export default function SettingsPage() {
         setSettings(s);
         setEntranceFee((s.entrance_fee_cents / 100).toFixed(2));
         setMaintenanceFee((s.maintenance_fee_cents / 100).toFixed(2));
+        setDuesAmount((s.maintenance_fee_cents / 100).toFixed(2));
         setAnchorMonth(String(s.maintenance_fee_anchor_month));
         setDueDays(String(s.assessment_due_days));
       })
@@ -70,6 +79,23 @@ export default function SettingsPage() {
       setSaveMsg(err instanceof ApiError ? err.message : "Save failed.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleGenerateDues(e: React.FormEvent) {
+    e.preventDefault();
+    const amount_cents = Math.round(parseFloat(duesAmount) * 100);
+    if (!amount_cents || amount_cents <= 0) { setDuesResult("Enter a valid amount."); return; }
+    if (!confirm(`Generate ${duesYear} annual dues of $${duesAmount} for all active members who don't yet have a dues obligation for ${duesYear}?`)) return;
+    setDuesLoading(true);
+    setDuesResult("");
+    try {
+      const r = await adminGenerateAnnualDues({ year: parseInt(duesYear), amount_cents, due_date: duesDueDate });
+      setDuesResult(`Done: ${r.created} obligations created, ${r.skipped} members already billed.`);
+    } catch (err) {
+      setDuesResult(err instanceof ApiError ? err.message : "Failed.");
+    } finally {
+      setDuesLoading(false);
     }
   }
 
@@ -208,6 +234,63 @@ export default function SettingsPage() {
             {saveMsg && (
               <p className={`text-sm ${saveMsg.includes("saved") ? "text-green-700" : "text-red-600"}`}>
                 {saveMsg}
+              </p>
+            )}
+          </div>
+        </form>
+      </section>
+
+      {/* ── Annual Dues Generation ── */}
+      <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+        <h2 className="text-base font-semibold text-gray-800 mb-1">Generate Annual Dues</h2>
+        <p className="text-sm text-gray-500 mb-4">
+          Create a fixed dues obligation for every active member who doesn't already have one for the selected year.
+          Members who have already paid will have their payment auto-applied when recorded.
+        </p>
+        <form onSubmit={handleGenerateDues} className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Year</label>
+              <select
+                value={duesYear}
+                onChange={(e) => { setDuesYear(e.target.value); setDuesDueDate(`${e.target.value}-12-31`); }}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              >
+                {[2024, 2025, 2026].map((y) => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Amount Per Member ($)</label>
+              <input
+                type="number" min="0" step="0.01"
+                value={duesAmount}
+                onChange={(e) => setDuesAmount(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Due Date</label>
+              <input
+                type="date"
+                value={duesDueDate}
+                onChange={(e) => setDuesDueDate(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                required
+              />
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              type="submit"
+              disabled={duesLoading}
+              className="bg-green-700 text-white text-sm font-medium px-5 py-2 rounded-lg hover:bg-green-800 disabled:opacity-50"
+            >
+              {duesLoading ? "Generating…" : `Generate ${duesYear} Annual Dues`}
+            </button>
+            {duesResult && (
+              <p className={`text-sm ${duesResult.includes("Done") ? "text-green-700" : "text-red-600"}`}>
+                {duesResult}
               </p>
             )}
           </div>
