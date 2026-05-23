@@ -16,11 +16,20 @@ class OrganizationSerializer(serializers.ModelSerializer):
 
 class UserSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(source="get_full_name", read_only=True)
+    roles = serializers.SerializerMethodField()
+
+    def get_roles(self, obj):
+        """Return list of active role strings for the user across all organisations."""
+        return list(
+            UserOrganizationRole.objects.filter(user=obj, is_active=True)
+            .values_list("role", flat=True)
+            .distinct()
+        )
 
     class Meta:
         model = User
-        fields = ["id", "email", "first_name", "last_name", "full_name", "mfa_enabled", "is_active"]
-        read_only_fields = ["id", "mfa_enabled"]
+        fields = ["id", "email", "first_name", "last_name", "full_name", "mfa_enabled", "is_active", "roles"]
+        read_only_fields = ["id", "mfa_enabled", "roles"]
 
 
 class UserRoleSerializer(serializers.ModelSerializer):

@@ -25,6 +25,7 @@ urlpatterns = [
     path("api/v1/reports/", include("apps.reporting.urls")),
     path("api/v1/me/", include("apps.portal.urls")),
     path("api/v1/exports/", include("apps.reporting.export_urls")),
+    path("api/v1/admin/", include("apps.admin_api.urls")),
 ]
 
 if settings.DEBUG:

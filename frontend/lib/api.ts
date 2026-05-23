@@ -115,6 +115,14 @@ export interface User {
   full_name: string;
   mfa_enabled: boolean;
   is_active: boolean;
+  roles?: string[];
+}
+
+const ADMIN_ROLES = new Set(["super_admin", "treasurer", "secretary", "chairperson"]);
+
+export function isAdmin(user: User | null): boolean {
+  if (!user || !user.roles) return false;
+  return user.roles.some((r) => ADMIN_ROLES.has(r));
 }
 
 export async function login(payload: LoginPayload): Promise<AuthResponse> {
@@ -292,4 +300,184 @@ export async function getMemberProfile(id: string): Promise<Member> {
 
 export async function updateMemberProfile(id: string, data: Partial<Member>): Promise<Member> {
   return apiFetch<Member>(`/members/${id}/`, { method: "PATCH", body: JSON.stringify(data) });
+}
+
+// ── Admin API types ───────────────────────────────────────────────────────────
+
+export interface AdminRecentPayment {
+  id: string;
+  member_id: string | null;
+  member_name: string;
+  amount_cents: number;
+  payment_date: string;
+  method: string;
+  reference: string;
+  notes: string;
+}
+
+export interface AdminDashboard {
+  total_members: number;
+  active_members: number;
+  total_collected_cents: number;
+  total_payouts_cents: number;
+  outstanding_cents: number;
+  members_this_month: number;
+  recent_payments: AdminRecentPayment[];
+  obligations_by_status: Record<string, number>;
+}
+
+export interface AdminMember {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  join_date: string;
+  status: string;
+  tier: string;
+  total_paid_cents: number;
+  outstanding_cents: number;
+  notes?: string;
+  address?: string;
+  phone_whatsapp?: string;
+  obligations?: AdminObligation[];
+  payments?: AdminPayment[];
+}
+
+export interface AdminPayment {
+  id: string;
+  member_id: string | null;
+  member_name: string;
+  amount_cents: number;
+  payment_date: string;
+  method: string;
+  reference: string;
+  notes: string;
+}
+
+export interface AdminObligation {
+  id: string;
+  obligation_type: string;
+  member_id: string;
+  member_name: string;
+  amount_cents: number;
+  paid_cents: number;
+  outstanding_cents: number;
+  due_date: string;
+  status: string;
+  event_id: string | null;
+}
+
+export interface AdminEvent {
+  id: string;
+  event_type: string;
+  household: string;
+  household_id: string;
+  event_date: string;
+  description: string;
+  payout_amount_cents: number;
+  status: string;
+}
+
+export interface AdminPaginatedResponse<T> {
+  count: number;
+  page: number;
+  total_pages: number;
+  results: T[];
+}
+
+// ── Admin API functions ───────────────────────────────────────────────────────
+
+export async function adminDashboard(): Promise<AdminDashboard> {
+  return apiFetch<AdminDashboard>("/admin/dashboard/");
+}
+
+export async function adminMembers(
+  params?: Record<string, string>
+): Promise<AdminPaginatedResponse<AdminMember>> {
+  const qs = params ? "?" + new URLSearchParams(params).toString() : "";
+  return apiFetch<AdminPaginatedResponse<AdminMember>>(`/admin/members/${qs}`);
+}
+
+export async function adminMember(id: string): Promise<AdminMember> {
+  return apiFetch<AdminMember>(`/admin/members/${id}/`);
+}
+
+export async function adminCreateMember(
+  data: Partial<AdminMember>
+): Promise<AdminMember> {
+  return apiFetch<AdminMember>("/admin/members/", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function adminUpdateMember(
+  id: string,
+  data: Partial<AdminMember>
+): Promise<AdminMember> {
+  return apiFetch<AdminMember>(`/admin/members/${id}/`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function adminPayments(
+  params?: Record<string, string>
+): Promise<AdminPaginatedResponse<AdminPayment>> {
+  const qs = params ? "?" + new URLSearchParams(params).toString() : "";
+  return apiFetch<AdminPaginatedResponse<AdminPayment>>(`/admin/payments/${qs}`);
+}
+
+export interface RecordPaymentPayload {
+  member_id: string;
+  amount_cents: number;
+  payment_date: string;
+  method: string;
+  reference?: string;
+  notes?: string;
+}
+
+export async function adminRecordPayment(
+  data: RecordPaymentPayload
+): Promise<AdminPayment> {
+  return apiFetch<AdminPayment>("/admin/payments/", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function adminObligations(
+  params?: Record<string, string>
+): Promise<AdminPaginatedResponse<AdminObligation>> {
+  const qs = params ? "?" + new URLSearchParams(params).toString() : "";
+  return apiFetch<AdminPaginatedResponse<AdminObligation>>(`/admin/obligations/${qs}`);
+}
+
+export async function adminSendReminders(): Promise<{ queued: number; detail: string }> {
+  return apiFetch<{ queued: number; detail: string }>("/admin/obligations/send-reminders/", {
+    method: "POST",
+  });
+}
+
+export async function adminEvents(
+  params?: Record<string, string>
+): Promise<AdminPaginatedResponse<AdminEvent>> {
+  const qs = params ? "?" + new URLSearchParams(params).toString() : "";
+  return apiFetch<AdminPaginatedResponse<AdminEvent>>(`/admin/events/${qs}`);
+}
+
+export interface CreateEventPayload {
+  event_type: string;
+  household_name: string;
+  event_date: string;
+  payout_amount_cents: number;
+  description?: string;
+}
+
+export async function adminCreateEvent(data: CreateEventPayload): Promise<AdminEvent> {
+  return apiFetch<AdminEvent>("/admin/events/", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 }
