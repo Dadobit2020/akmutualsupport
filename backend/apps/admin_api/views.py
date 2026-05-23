@@ -113,6 +113,22 @@ def _serialize_event(e):
     }
 
 
+def _serialize_family_member(fm):
+    return {
+        "id": str(fm.id),
+        "first_name": fm.first_name,
+        "last_name": fm.last_name,
+        "first_name_am": fm.first_name_am,
+        "last_name_am": fm.last_name_am,
+        "relationship": fm.relationship,
+        "date_of_birth": str(fm.date_of_birth),
+        "gender": fm.gender,
+        "age": fm.age,
+        "is_active": fm.is_active,
+        "notes": fm.notes,
+    }
+
+
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 
 @api_view(["GET"])
@@ -253,20 +269,17 @@ def member_detail(request, member_id):
         return Response({"detail": "Member not found."}, status=status.HTTP_404_NOT_FOUND)
 
     if request.method == "GET":
-        # Obligations
-        obligations = list(
-            Obligation.objects.filter(member=member).order_by("-due_date")
-        )
-        # Payments
-        payments = list(
-            Payment.objects.filter(member=member).order_by("-payment_date")
-        )
+        from apps.membership.models import FamilyMember
+        obligations = list(Obligation.objects.filter(member=member).order_by("-due_date"))
+        payments = list(Payment.objects.filter(member=member).order_by("-payment_date"))
+        family = list(FamilyMember.objects.filter(member=member))
         data = _serialize_member_brief(member)
         data["notes"] = member.notes
         data["address"] = member.address
         data["phone_whatsapp"] = member.phone_whatsapp
         data["obligations"] = [_serialize_obligation(o) for o in obligations]
         data["payments"] = [_serialize_payment(p) for p in payments]
+        data["family_members"] = [_serialize_family_member(fm) for fm in family]
         return Response(data)
 
     # PATCH — update member
@@ -700,3 +713,92 @@ def process_assessment(request):
         "due_date": str(due_date),
         "description": description,
     })
+
+
+# ── Family Members ────────────────────────────────────────────────────────────
+
+@api_view(["GET", "POST"])
+@permission_classes(_ADMIN_PERMISSIONS)
+def family_members_list(request, member_id):
+    from apps.membership.models import FamilyMember
+    org = request.organization
+    try:
+        member = Member.objects.get(id=member_id, organization=org)
+    except Member.DoesNotExist:
+        return Response({"detail": "Member not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == "GET":
+        family = FamilyMember.objects.filter(member=member)
+        return Response([_serialize_family_member(fm) for fm in family])
+
+    # POST — add a new family member
+    required = ["first_name", "last_name", "relationship", "date_of_birth"]
+    errors = {f: "Required." for f in required if not request.data.get(f, "").strip()}
+    if errors:
+        return Response(errors, status=status.HTTP_400_BAD_REQUEST)
+
+    valid_relationships = {"spouse", "child", "parent", "sibling", "other"}
+    if request.data["relationship"] not in valid_relationships:
+        return Response({"relationship": "Invalid value."}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        dob = date.fromisoformat(request.data["date_of_birth"])
+    except (ValueError, TypeError):
+        return Response({"date_of_birth": "Use YYYY-MM-DD format."}, status=status.HTTP_400_BAD_REQUEST)
+
+    if dob > date.today():
+        return Response({"date_of_birth": "Date of birth cannot be in the future."}, status=status.HTTP_400_BAD_REQUEST)
+
+    gender = request.data.get("gender", "").strip()
+    if gender and gender not in {"male", "female", "other"}:
+        gender = ""
+
+    fm = FamilyMember.objects.create(
+        member=member,
+        first_name=request.data["first_name"].strip(),
+        last_name=request.data["last_name"].strip(),
+        first_name_am=request.data.get("first_name_am", "").strip(),
+        last_name_am=request.data.get("last_name_am", "").strip(),
+        relationship=request.data["relationship"],
+        date_of_birth=dob,
+        gender=gender,
+        notes=request.data.get("notes", "").strip(),
+        is_active=True,
+    )
+    return Response(_serialize_family_member(fm), status=status.HTTP_201_CREATED)
+
+
+@api_view(["PATCH", "DELETE"])
+@permission_classes(_ADMIN_PERMISSIONS)
+def family_member_detail(request, member_id, fm_id):
+    from apps.membership.models import FamilyMember
+    org = request.organization
+    try:
+        member = Member.objects.get(id=member_id, organization=org)
+        fm = FamilyMember.objects.get(id=fm_id, member=member)
+    except (Member.DoesNotExist, FamilyMember.DoesNotExist):
+        return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == "DELETE":
+        fm.is_active = False
+        fm.save(update_fields=["is_active", "updated_at"])
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    # PATCH
+    updatable = ["first_name", "last_name", "first_name_am", "last_name_am",
+                 "relationship", "gender", "notes", "is_active"]
+    for field in updatable:
+        if field in request.data:
+            setattr(fm, field, request.data[field])
+
+    if "date_of_birth" in request.data:
+        try:
+            dob = date.fromisoformat(request.data["date_of_birth"])
+            if dob > date.today():
+                return Response({"date_of_birth": "Cannot be in the future."}, status=status.HTTP_400_BAD_REQUEST)
+            fm.date_of_birth = dob
+        except (ValueError, TypeError):
+            return Response({"date_of_birth": "Use YYYY-MM-DD format."}, status=status.HTTP_400_BAD_REQUEST)
+
+    fm.save()
+    return Response(_serialize_family_member(fm))

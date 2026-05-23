@@ -326,6 +326,20 @@ export interface AdminDashboard {
   obligations_by_status: Record<string, number>;
 }
 
+export interface FamilyMember {
+  id: string;
+  first_name: string;
+  last_name: string;
+  first_name_am: string;
+  last_name_am: string;
+  relationship: string;
+  date_of_birth: string;
+  gender: string;
+  age: number;
+  is_active: boolean;
+  notes: string;
+}
+
 export interface AdminMember {
   id: string;
   first_name: string;
@@ -342,6 +356,45 @@ export interface AdminMember {
   phone_whatsapp?: string;
   obligations?: AdminObligation[];
   payments?: AdminPayment[];
+  family_members?: FamilyMember[];
+}
+
+export async function adminFamilyMembers(memberId: string): Promise<FamilyMember[]> {
+  return apiFetch<FamilyMember[]>(`/admin/members/${memberId}/family/`);
+}
+
+export async function adminAddFamilyMember(
+  memberId: string,
+  data: {
+    first_name: string;
+    last_name: string;
+    first_name_am?: string;
+    last_name_am?: string;
+    relationship: string;
+    date_of_birth: string;
+    gender?: string;
+    notes?: string;
+  }
+): Promise<FamilyMember> {
+  return apiFetch<FamilyMember>(`/admin/members/${memberId}/family/`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function adminUpdateFamilyMember(
+  memberId: string,
+  fmId: string,
+  data: Partial<FamilyMember>
+): Promise<FamilyMember> {
+  return apiFetch<FamilyMember>(`/admin/members/${memberId}/family/${fmId}/`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function adminRemoveFamilyMember(memberId: string, fmId: string): Promise<void> {
+  await apiFetch<void>(`/admin/members/${memberId}/family/${fmId}/`, { method: "DELETE" });
 }
 
 export interface AdminPayment {

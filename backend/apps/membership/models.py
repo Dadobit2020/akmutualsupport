@@ -154,6 +154,59 @@ class Member(OrganizationScopedModel):
         return self.contribution_rule
 
 
+class Relationship(models.TextChoices):
+    SPOUSE = "spouse", "Spouse"
+    CHILD = "child", "Child"
+    PARENT = "parent", "Parent"
+    SIBLING = "sibling", "Sibling"
+    OTHER = "other", "Other"
+
+
+class FamilyMember(TimeStampedModel):
+    """
+    A dependent or covered family member under a primary Member's plan.
+    Not an association member themselves — covered for bereavement/event payouts.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    member = models.ForeignKey(
+        Member,
+        on_delete=models.CASCADE,
+        related_name="family_members",
+    )
+    first_name = models.CharField(max_length=100)
+    last_name = models.CharField(max_length=100)
+    first_name_am = models.CharField(max_length=100, blank=True)
+    last_name_am = models.CharField(max_length=100, blank=True)
+    relationship = models.CharField(max_length=10, choices=Relationship.choices)
+    date_of_birth = models.DateField()
+    gender = models.CharField(
+        max_length=10,
+        choices=[("male", "Male"), ("female", "Female"), ("other", "Other")],
+        blank=True,
+    )
+    is_active = models.BooleanField(default=True)
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        db_table = "family_member"
+        ordering = ["relationship", "date_of_birth"]
+
+    def __str__(self):
+        return f"{self.first_name} {self.last_name} ({self.relationship}) → {self.member}"
+
+    @property
+    def full_name(self):
+        return f"{self.first_name} {self.last_name}"
+
+    @property
+    def age(self):
+        from datetime import date
+        today = date.today()
+        dob = self.date_of_birth
+        return today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+
+
 class HouseholdMembershipHistory(TimeStampedModel):
     """Append-only record of household membership changes."""
 

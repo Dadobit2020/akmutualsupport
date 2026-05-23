@@ -12,4 +12,6 @@ urlpatterns = [
     path("settings/", views.org_settings, name="admin-settings"),
     path("assessment/preview/", views.assessment_preview, name="admin-assessment-preview"),
     path("assessment/process/", views.process_assessment, name="admin-process-assessment"),
+    path("members/<uuid:member_id>/family/", views.family_members_list, name="admin-family-list"),
+    path("members/<uuid:member_id>/family/<uuid:fm_id>/", views.family_member_detail, name="admin-family-detail"),
 ]

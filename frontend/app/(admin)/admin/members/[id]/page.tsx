@@ -6,7 +6,11 @@ import {
   adminMember,
   adminUpdateMember,
   adminRecordPayment,
+  adminAddFamilyMember,
+  adminUpdateFamilyMember,
+  adminRemoveFamilyMember,
   AdminMember,
+  FamilyMember,
   ApiError,
 } from "@/lib/api";
 import { formatMoney, formatDate } from "@/lib/utils";
@@ -144,6 +148,216 @@ function RecordPaymentForm({
           </Button>
         </div>
       </form>
+    </div>
+  );
+}
+
+const RELATIONSHIP_LABELS: Record<string, string> = {
+  spouse: "Spouse",
+  child: "Child",
+  parent: "Parent",
+  sibling: "Sibling",
+  other: "Other",
+};
+
+const RELATIONSHIP_COLORS: Record<string, string> = {
+  spouse: "bg-purple-100 text-purple-800",
+  child: "bg-blue-100 text-blue-800",
+  parent: "bg-amber-100 text-amber-800",
+  sibling: "bg-teal-100 text-teal-800",
+  other: "bg-gray-100 text-gray-600",
+};
+
+const EMPTY_FM = {
+  first_name: "",
+  last_name: "",
+  first_name_am: "",
+  last_name_am: "",
+  relationship: "spouse",
+  date_of_birth: "",
+  gender: "",
+  notes: "",
+};
+
+function FamilyMembersSection({
+  member,
+  onRefresh,
+}: {
+  member: AdminMember;
+  onRefresh: () => void;
+}) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ ...EMPTY_FM });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [removing, setRemoving] = useState<string | null>(null);
+
+  const family = member.family_members ?? [];
+  const active = family.filter((fm) => fm.is_active);
+
+  async function handleAdd(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.first_name || !form.last_name || !form.date_of_birth) {
+      setError("First name, last name, and date of birth are required.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      await adminAddFamilyMember(member.id, form);
+      setShowAdd(false);
+      setForm({ ...EMPTY_FM });
+      onRefresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to add family member.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleRemove(fm: FamilyMember) {
+    if (!confirm(`Remove ${fm.first_name} ${fm.last_name} from coverage?`)) return;
+    setRemoving(fm.id);
+    try {
+      await adminRemoveFamilyMember(member.id, fm.id);
+      onRefresh();
+    } catch {
+      alert("Failed to remove family member.");
+    } finally {
+      setRemoving(null);
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+        <div>
+          <h2 className="text-sm font-semibold text-gray-800">Covered Family Members</h2>
+          <p className="text-xs text-gray-400 mt-0.5">{active.length} covered dependent{active.length !== 1 ? "s" : ""}</p>
+        </div>
+        <button
+          onClick={() => { setShowAdd(!showAdd); setError(""); }}
+          className="flex items-center gap-1 text-xs bg-green-700 text-white px-3 py-1.5 rounded-lg hover:bg-green-800"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          Add Member
+        </button>
+      </div>
+
+      {showAdd && (
+        <div className="px-5 py-4 bg-green-50 border-b border-green-100">
+          <p className="text-xs font-semibold text-green-900 mb-3">New Family Member</p>
+          {error && <p className="text-xs text-red-600 mb-3">{error}</p>}
+          <form onSubmit={handleAdd} className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">First Name *</label>
+              <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} required />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Last Name *</label>
+              <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} required />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">First Name (Amharic)</label>
+              <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                value={form.first_name_am} onChange={(e) => setForm({ ...form, first_name_am: e.target.value })} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Last Name (Amharic)</label>
+              <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                value={form.last_name_am} onChange={(e) => setForm({ ...form, last_name_am: e.target.value })} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Relationship *</label>
+              <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                value={form.relationship} onChange={(e) => setForm({ ...form, relationship: e.target.value })}>
+                <option value="spouse">Spouse</option>
+                <option value="child">Child</option>
+                <option value="parent">Parent</option>
+                <option value="sibling">Sibling</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Date of Birth *</label>
+              <input type="date" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                value={form.date_of_birth} onChange={(e) => setForm({ ...form, date_of_birth: e.target.value })} required />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Gender</label>
+              <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}>
+                <option value="">Prefer not to say</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Notes</label>
+              <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                placeholder="e.g. Student, dependent, etc."
+                value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+            </div>
+            <div className="col-span-2 flex justify-end gap-2">
+              <button type="button" onClick={() => setShowAdd(false)}
+                className="px-4 py-2 text-sm border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50">
+                Cancel
+              </button>
+              <button type="submit" disabled={saving}
+                className="px-4 py-2 text-sm bg-green-700 text-white font-medium rounded-lg hover:bg-green-800 disabled:opacity-50">
+                {saving ? "Saving…" : "Add Family Member"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {active.length === 0 && !showAdd ? (
+        <p className="text-sm text-gray-400 text-center py-8">No covered family members registered.</p>
+      ) : (
+        <div className="divide-y divide-gray-50">
+          {active.map((fm) => (
+            <div key={fm.id} className="px-5 py-3 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-xs font-semibold text-gray-600 shrink-0">
+                  {fm.first_name[0]}{fm.last_name[0]}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">
+                    {fm.first_name} {fm.last_name}
+                    {fm.first_name_am && (
+                      <span className="text-gray-400 ml-1 text-xs">({fm.first_name_am} {fm.last_name_am})</span>
+                    )}
+                  </p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${RELATIONSHIP_COLORS[fm.relationship]}`}>
+                      {RELATIONSHIP_LABELS[fm.relationship]}
+                    </span>
+                    <span className="text-xs text-gray-400">
+                      DOB: {formatDate(fm.date_of_birth)} · Age {fm.age}
+                    </span>
+                    {fm.gender && <span className="text-xs text-gray-400 capitalize">{fm.gender}</span>}
+                  </div>
+                  {fm.notes && <p className="text-xs text-gray-400 mt-0.5">{fm.notes}</p>}
+                </div>
+              </div>
+              <button
+                onClick={() => handleRemove(fm)}
+                disabled={removing === fm.id}
+                className="text-xs text-red-500 hover:text-red-700 shrink-0 disabled:opacity-40"
+                title="Remove from coverage"
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -415,6 +629,9 @@ export default function MemberDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Family Members */}
+      <FamilyMembersSection member={member} onRefresh={load} />
 
       {/* Payment history */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
