@@ -9,4 +9,7 @@ urlpatterns = [
     path("obligations/", views.obligations_list, name="admin-obligations-list"),
     path("obligations/send-reminders/", views.send_reminders, name="admin-send-reminders"),
     path("events/", views.events_list, name="admin-events-list"),
+    path("settings/", views.org_settings, name="admin-settings"),
+    path("assessment/preview/", views.assessment_preview, name="admin-assessment-preview"),
+    path("assessment/process/", views.process_assessment, name="admin-process-assessment"),
 ]

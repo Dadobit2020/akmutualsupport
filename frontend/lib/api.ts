@@ -481,3 +481,56 @@ export async function adminCreateEvent(data: CreateEventPayload): Promise<AdminE
     body: JSON.stringify(data),
   });
 }
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+
+export interface OrgSettings {
+  entrance_fee_cents: number;
+  maintenance_fee_cents: number;
+  maintenance_fee_anchor_month: number;
+  assessment_due_days: number;
+  active_member_count: number;
+  audit_log: {
+    field: string;
+    old_value: string;
+    new_value: string;
+    changed_by: string;
+    changed_at: string;
+  }[];
+}
+
+export interface AssessmentPreview {
+  total_payout_cents: number;
+  active_member_count: number;
+  per_member_cents: number;
+  due_date: string;
+}
+
+export async function adminGetSettings(): Promise<OrgSettings> {
+  return apiFetch<OrgSettings>("/admin/settings/");
+}
+
+export async function adminUpdateSettings(
+  data: Partial<Pick<OrgSettings, "entrance_fee_cents" | "maintenance_fee_cents" | "maintenance_fee_anchor_month" | "assessment_due_days">>
+): Promise<{ ok: boolean }> {
+  return apiFetch<{ ok: boolean }>("/admin/settings/", {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function adminAssessmentPreview(amountDollars: number): Promise<AssessmentPreview> {
+  return apiFetch<AssessmentPreview>(`/admin/assessment/preview/?amount=${amountDollars}`);
+}
+
+export async function adminProcessAssessment(data: {
+  total_cents: number;
+  per_member_cents: number;
+  due_date: string;
+  description: string;
+}): Promise<{ ok: boolean; member_count: number; per_member_cents: number; due_date: string }> {
+  return apiFetch("/admin/assessment/process/", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}

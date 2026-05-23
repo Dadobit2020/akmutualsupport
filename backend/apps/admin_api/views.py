@@ -2,6 +2,9 @@
 Admin API views — full control panel endpoints.
 All views require IsAuthenticated + IsOrgAdmin.
 """
+import math
+from datetime import date, timedelta
+
 from django.db import transaction
 from django.db.models import Q, Sum
 from django.utils import timezone
@@ -13,7 +16,7 @@ from rest_framework import status
 
 from apps.identity.models import UserOrganizationRole
 from apps.membership.models import Member, MemberStatus, MembershipTier
-from apps.obligations.models import Obligation, ObligationStatus, Payment
+from apps.obligations.models import Obligation, ObligationStatus, ObligationType, Payment
 from apps.ledger.models import (
     LedgerTransaction,
     LedgerEntry,
@@ -545,3 +548,155 @@ def events_list(request):
         )
 
     return Response(_serialize_event(event), status=status.HTTP_201_CREATED)
+
+
+# ── Settings ──────────────────────────────────────────────────────────────────
+
+@api_view(["GET", "PATCH"])
+@permission_classes(_ADMIN_PERMISSIONS)
+def org_settings(request):
+    from .models import OrgSettings, SettingsAuditLog
+    org = request.organization
+    settings_obj, _ = OrgSettings.objects.get_or_create(organization=org)
+
+    if request.method == "GET":
+        active_count = Member.objects.filter(organization=org, status=MemberStatus.ACTIVE).count()
+        audit_logs = SettingsAuditLog.objects.filter(organization=org).select_related("changed_by")[:20]
+        return Response({
+            "entrance_fee_cents": settings_obj.entrance_fee_cents,
+            "maintenance_fee_cents": settings_obj.maintenance_fee_cents,
+            "maintenance_fee_anchor_month": settings_obj.maintenance_fee_anchor_month,
+            "assessment_due_days": settings_obj.assessment_due_days,
+            "active_member_count": active_count,
+            "audit_log": [
+                {
+                    "field": log.field_name,
+                    "old_value": log.old_value,
+                    "new_value": log.new_value,
+                    "changed_by": log.changed_by.get_full_name() if log.changed_by else "—",
+                    "changed_at": log.changed_at.isoformat(),
+                }
+                for log in audit_logs
+            ],
+        })
+
+    # PATCH — update with audit logging
+    UPDATABLE = {
+        "entrance_fee_cents": int,
+        "maintenance_fee_cents": int,
+        "maintenance_fee_anchor_month": int,
+        "assessment_due_days": int,
+    }
+    logs = []
+    errors = {}
+    for field, cast in UPDATABLE.items():
+        if field not in request.data:
+            continue
+        try:
+            new_val = cast(request.data[field])
+        except (ValueError, TypeError):
+            errors[field] = "Must be an integer."
+            continue
+        if field == "maintenance_fee_anchor_month" and not (1 <= new_val <= 12):
+            errors[field] = "Must be 1–12."
+            continue
+        old_val = getattr(settings_obj, field)
+        if old_val != new_val:
+            logs.append(SettingsAuditLog(
+                organization=org,
+                changed_by=request.user,
+                field_name=field,
+                old_value=str(old_val),
+                new_value=str(new_val),
+            ))
+            setattr(settings_obj, field, new_val)
+
+    if errors:
+        return Response(errors, status=status.HTTP_400_BAD_REQUEST)
+
+    settings_obj.updated_by = request.user
+    settings_obj.save()
+    if logs:
+        SettingsAuditLog.objects.bulk_create(logs)
+
+    return Response({"ok": True})
+
+
+# ── Assessment calculator ──────────────────────────────────────────────────────
+
+@api_view(["GET"])
+@permission_classes(_ADMIN_PERMISSIONS)
+def assessment_preview(request):
+    """Return per-member fee for a given total payout (without creating anything)."""
+    from .models import OrgSettings
+    org = request.organization
+    try:
+        total_cents = round(float(request.query_params.get("amount", 0)) * 100)
+    except (ValueError, TypeError):
+        return Response({"error": "Invalid amount."}, status=status.HTTP_400_BAD_REQUEST)
+    if total_cents <= 0:
+        return Response({"error": "Amount must be greater than zero."}, status=status.HTTP_400_BAD_REQUEST)
+
+    active_count = Member.objects.filter(organization=org, status=MemberStatus.ACTIVE).count()
+    if active_count == 0:
+        return Response({"error": "No active members found."}, status=status.HTTP_400_BAD_REQUEST)
+
+    per_member_cents = math.ceil(total_cents / active_count)
+    settings_obj, _ = OrgSettings.objects.get_or_create(organization=org)
+    return Response({
+        "total_payout_cents": total_cents,
+        "active_member_count": active_count,
+        "per_member_cents": per_member_cents,
+        "due_date": str(date.today() + timedelta(days=settings_obj.assessment_due_days)),
+    })
+
+
+@api_view(["POST"])
+@permission_classes(_ADMIN_PERMISSIONS)
+def process_assessment(request):
+    """Bulk-create obligations for all active members for a special assessment."""
+    from .models import OrgSettings
+    org = request.organization
+
+    try:
+        total_cents = int(request.data.get("total_cents", 0))
+        per_member_cents = int(request.data.get("per_member_cents", 0))
+        due_date_str = request.data.get("due_date", "")
+        description = request.data.get("description", "Special Assessment").strip() or "Special Assessment"
+    except (ValueError, TypeError):
+        return Response({"error": "Invalid data."}, status=status.HTTP_400_BAD_REQUEST)
+
+    if total_cents <= 0 or per_member_cents <= 0:
+        return Response({"error": "Amounts must be positive."}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        due_date = date.fromisoformat(due_date_str)
+    except (ValueError, TypeError):
+        settings_obj, _ = OrgSettings.objects.get_or_create(organization=org)
+        due_date = date.today() + timedelta(days=settings_obj.assessment_due_days)
+
+    active_members = list(Member.objects.filter(organization=org, status=MemberStatus.ACTIVE))
+    if not active_members:
+        return Response({"error": "No active members."}, status=status.HTTP_400_BAD_REQUEST)
+
+    with transaction.atomic():
+        Obligation.objects.bulk_create([
+            Obligation(
+                organization=org,
+                member=member,
+                obligation_type=ObligationType.DUES,
+                amount_cents=per_member_cents,
+                due_date=due_date,
+                status=ObligationStatus.OPEN,
+                notes=description,
+            )
+            for member in active_members
+        ])
+
+    return Response({
+        "ok": True,
+        "member_count": len(active_members),
+        "per_member_cents": per_member_cents,
+        "due_date": str(due_date),
+        "description": description,
+    })
