@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   adminMembers,
   adminCreateMember,
+  adminUpdateMember,
   AdminMember,
   ApiError,
 } from "@/lib/api";
@@ -159,6 +160,20 @@ export default function MembersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showAdd, setShowAdd] = useState(false);
+  const [statusChanging, setStatusChanging] = useState<string | null>(null);
+
+  async function handleStatusChange(m: AdminMember, newStatus: string) {
+    if (!confirm(`${newStatus === "suspended" ? "Suspend" : "Activate"} ${m.first_name} ${m.last_name}?`)) return;
+    setStatusChanging(m.id);
+    try {
+      const updated = await adminUpdateMember(m.id, { status: newStatus });
+      setMembers((prev) => prev.map((x) => x.id === m.id ? { ...x, status: updated.status } : x));
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : "Failed.");
+    } finally {
+      setStatusChanging(null);
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -278,12 +293,32 @@ export default function MembersPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <Link
-                        href={`/admin/members/${m.id}`}
-                        className="text-xs text-green-700 hover:underline font-medium"
-                      >
-                        View
-                      </Link>
+                      <div className="flex items-center justify-end gap-3">
+                        {m.status === "active" && (
+                          <button
+                            onClick={() => handleStatusChange(m, "suspended")}
+                            disabled={statusChanging === m.id}
+                            className="text-xs text-amber-600 hover:underline disabled:opacity-40"
+                          >
+                            Suspend
+                          </button>
+                        )}
+                        {m.status === "suspended" && (
+                          <button
+                            onClick={() => handleStatusChange(m, "active")}
+                            disabled={statusChanging === m.id}
+                            className="text-xs text-green-700 hover:underline disabled:opacity-40"
+                          >
+                            Activate
+                          </button>
+                        )}
+                        <Link
+                          href={`/admin/members/${m.id}`}
+                          className="text-xs text-green-700 hover:underline font-medium"
+                        >
+                          View
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 ))}

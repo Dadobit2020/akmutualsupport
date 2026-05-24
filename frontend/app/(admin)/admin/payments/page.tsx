@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import {
   adminPayments,
   adminRecordPayment,
+  adminDeletePayment,
   adminMembers,
   AdminPayment,
   AdminMember,
@@ -239,6 +240,7 @@ export default function PaymentsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showModal, setShowModal] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -264,9 +266,24 @@ export default function PaymentsPage() {
     load();
   }, [load]);
 
-  useEffect(() => {
-    setPage(1);
-  }, [method, dateFrom, dateTo]);
+  useEffect(() => { setPage(1); }, [method, dateFrom, dateTo]);
+
+  async function handleDelete(p: AdminPayment) {
+    if (!confirm(
+      `Void this payment?\n\n${p.member_name} — ${formatMoney(p.amount_cents)} on ${formatDate(p.payment_date)}\n\n` +
+      `This will reverse the ledger entries and unapply the payment from any obligations.`
+    )) return;
+    setDeletingId(p.id);
+    try {
+      await adminDeletePayment(p.id);
+      setPayments((prev) => prev.filter((x) => x.id !== p.id));
+      setTotal((t) => t - 1);
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : "Failed to delete payment.");
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   return (
     <div className="space-y-5 max-w-6xl">
@@ -342,6 +359,7 @@ export default function PaymentsPage() {
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Date</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Method</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Reference</th>
+                  <th className="px-4 py-3" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -352,6 +370,15 @@ export default function PaymentsPage() {
                     <td className="px-4 py-3 text-gray-500">{formatDate(p.payment_date)}</td>
                     <td className="px-4 py-3 text-gray-500">{METHOD_LABELS[p.method] ?? p.method}</td>
                     <td className="px-4 py-3 text-gray-400">{p.reference || "—"}</td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        onClick={() => handleDelete(p)}
+                        disabled={deletingId === p.id}
+                        className="text-xs text-red-500 hover:underline disabled:opacity-40"
+                      >
+                        {deletingId === p.id ? "…" : "Void"}
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>

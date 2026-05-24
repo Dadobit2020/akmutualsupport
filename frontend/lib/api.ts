@@ -523,6 +523,28 @@ export async function adminDeleteObligation(id: string): Promise<void> {
   await apiFetch<void>(`/admin/obligations/${id}/`, { method: "DELETE" });
 }
 
+export async function adminDeletePayment(id: string): Promise<void> {
+  await apiFetch<void>(`/admin/payments/${id}/`, { method: "DELETE" });
+}
+
+export interface ActivityLogEntry {
+  id: number;
+  action: string;
+  actor: string;
+  actor_email: string;
+  target_type: string;
+  target_label: string;
+  description: string;
+  created_at: string;
+}
+
+export async function adminActivityLog(
+  params?: Record<string, string>
+): Promise<AdminPaginatedResponse<ActivityLogEntry>> {
+  const qs = params ? "?" + new URLSearchParams(params).toString() : "";
+  return apiFetch<AdminPaginatedResponse<ActivityLogEntry>>(`/admin/activity/${qs}`);
+}
+
 export async function adminSendReminders(): Promise<{ queued: number; detail: string }> {
   return apiFetch<{ queued: number; detail: string }>("/admin/obligations/send-reminders/", {
     method: "POST",

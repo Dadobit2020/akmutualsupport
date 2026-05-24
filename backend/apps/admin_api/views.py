@@ -31,6 +31,22 @@ from .permissions import IsOrgAdmin
 _ADMIN_PERMISSIONS = [IsAuthenticated, IsOrgAdmin]
 
 
+# ── Audit helper ──────────────────────────────────────────────────────────────
+
+def log_action(request, action: str, description: str,
+               target_type: str = "", target_id: str = "", target_label: str = ""):
+    from .models import AdminActionLog
+    AdminActionLog.objects.create(
+        organization=request.organization,
+        actor=request.user,
+        action=action,
+        target_type=target_type,
+        target_id=str(target_id),
+        target_label=target_label,
+        description=description,
+    )
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _paginate(queryset, request, page_size=20):
@@ -258,6 +274,11 @@ def members_list(request):
         tier=data.get("tier", MembershipTier.STANDARD),
         notes=data.get("notes", ""),
     )
+    log_action(
+        request, "member_created",
+        f"Added new member: {member.get_full_name()}",
+        target_type="Member", target_id=str(member.id), target_label=member.get_full_name(),
+    )
     return Response(_serialize_member_brief(member), status=status.HTTP_201_CREATED)
 
 
@@ -286,10 +307,34 @@ def member_detail(request, member_id):
 
     # PATCH — update member
     allowed = ["status", "tier", "email", "phone", "phone_whatsapp", "notes", "address", "first_name", "last_name"]
+    old_status = member.status
     for field in allowed:
         if field in request.data:
             setattr(member, field, request.data[field])
     member.save()
+
+    # Log status changes specifically
+    new_status = member.status
+    if "status" in request.data and old_status != new_status:
+        action_map = {
+            "suspended": "member_suspended",
+            "active": "member_activated",
+            "inactive": "member_deactivated",
+            "left": "member_left",
+        }
+        action = action_map.get(new_status, "member_status_changed")
+        log_action(
+            request, action,
+            f"Changed {member.get_full_name()} status: {old_status} → {new_status}",
+            target_type="Member", target_id=str(member.id), target_label=member.get_full_name(),
+        )
+    elif any(f in request.data for f in ["email", "phone", "notes", "address", "first_name", "last_name", "tier"]):
+        changed = [f for f in allowed if f in request.data and f != "status"]
+        log_action(
+            request, "member_updated",
+            f"Updated {member.get_full_name()} — fields: {', '.join(changed)}",
+            target_type="Member", target_id=str(member.id), target_label=member.get_full_name(),
+        )
     return Response(_serialize_member_brief(member))
 
 
@@ -419,7 +464,110 @@ def payments_list(request):
                 ob.apply_payment_cents(apply)
                 remaining -= apply
 
+    log_action(
+        request, "payment_recorded",
+        f"Recorded ${amount_cents/100:.2f} payment from {member.get_full_name()} on {data['payment_date']}",
+        target_type="Payment", target_id=str(payment.id),
+        target_label=member.get_full_name(),
+    )
     return Response(_serialize_payment(payment), status=status.HTTP_201_CREATED)
+
+
+@api_view(["DELETE"])
+@permission_classes(_ADMIN_PERMISSIONS)
+def payment_detail(request, payment_id):
+    """Void a payment: reverse ledger entries, unapply from obligations, delete record."""
+    org = request.organization
+    try:
+        payment = Payment.objects.select_related("member", "ledger_transaction").get(
+            id=payment_id, organization=org
+        )
+    except Payment.DoesNotExist:
+        return Response({"detail": "Payment not found."}, status=404)
+
+    member_name = payment.member.get_full_name() if payment.member else "—"
+    amount_cents = payment.amount_cents
+    pay_date = str(payment.payment_date)
+
+    with transaction.atomic():
+        # Reverse obligation applications — add back paid_cents
+        from apps.obligations.models import PaymentApplication
+        for app in payment.applications.select_related("obligation").all():
+            ob = app.obligation
+            ob.paid_cents = max(0, ob.paid_cents - app.applied_cents)
+            if ob.paid_cents == 0:
+                ob.status = ObligationStatus.OPEN
+            elif ob.paid_cents < ob.amount_cents:
+                ob.status = ObligationStatus.PARTIALLY_PAID
+            ob.save(update_fields=["paid_cents", "status", "updated_at"])
+
+        # Reverse ledger entries by creating a negating transaction
+        if payment.ledger_transaction:
+            orig = payment.ledger_transaction
+            try:
+                cash_account = LedgerAccount.objects.get(organization=org, code="CASH")
+                contrib_account = LedgerAccount.objects.get(organization=org, code="CONTRIB_REV")
+                rev_txn = LedgerTransaction.objects.create(
+                    organization=org,
+                    description=f"VOID — {orig.description}",
+                    transaction_date=date.today(),
+                    source=TransactionSource.ADJUSTMENT,
+                    posted_by=request.user,
+                    notes=f"Reversal of payment {payment_id} recorded on {pay_date}",
+                )
+                LedgerEntry.objects.create(
+                    ledger_transaction=rev_txn, account=contrib_account,
+                    debit_cents=amount_cents, credit_cents=0,
+                    member=payment.member, description="Reversal — void payment",
+                )
+                LedgerEntry.objects.create(
+                    ledger_transaction=rev_txn, account=cash_account,
+                    debit_cents=0, credit_cents=amount_cents,
+                    member=payment.member, description="Reversal — void payment",
+                )
+            except LedgerAccount.DoesNotExist:
+                pass  # Still delete the payment even if ledger accounts aren't found
+
+        payment.delete()
+
+    log_action(
+        request, "payment_deleted",
+        f"Deleted ${amount_cents/100:.2f} payment from {member_name} dated {pay_date}",
+        target_type="Payment", target_id=str(payment_id), target_label=member_name,
+    )
+    return Response(status=204)
+
+
+# ── Activity Log ──────────────────────────────────────────────────────────────
+
+@api_view(["GET"])
+@permission_classes(_ADMIN_PERMISSIONS)
+def activity_log(request):
+    from .models import AdminActionLog
+    org = request.organization
+    qs = AdminActionLog.objects.filter(organization=org).select_related("actor")
+    action_filter = request.query_params.get("action", "").strip()
+    if action_filter:
+        qs = qs.filter(action=action_filter)
+    items, total, page, total_pages = _paginate(qs, request, page_size=50)
+    return Response({
+        "count": total,
+        "page": page,
+        "total_pages": total_pages,
+        "results": [
+            {
+                "id": item.id,
+                "action": item.action,
+                "actor": item.actor.get_full_name() if item.actor else "System",
+                "actor_email": item.actor.email if item.actor else "",
+                "target_type": item.target_type,
+                "target_label": item.target_label,
+                "description": item.description,
+                "created_at": item.created_at.isoformat(),
+            }
+            for item in items
+        ],
+    })
 
 
 # ── Obligations ───────────────────────────────────────────────────────────────

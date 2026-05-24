@@ -47,3 +47,29 @@ class SettingsAuditLog(models.Model):
     class Meta:
         db_table = "settings_audit_log"
         ordering = ["-changed_at"]
+
+
+class AdminActionLog(models.Model):
+    """Immutable record of every significant admin action."""
+
+    organization = models.ForeignKey(
+        "identity.Organization",
+        on_delete=models.CASCADE,
+        related_name="admin_action_logs",
+    )
+    actor = models.ForeignKey(
+        "identity.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="admin_actions",
+    )
+    action = models.CharField(max_length=60)        # e.g. "payment_recorded"
+    target_type = models.CharField(max_length=50, blank=True)  # "Member", "Payment", …
+    target_id = models.CharField(max_length=100, blank=True)
+    target_label = models.CharField(max_length=255, blank=True)  # human-readable name
+    description = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "admin_action_log"
+        ordering = ["-created_at"]
