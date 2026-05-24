@@ -1,112 +1,278 @@
 "use client";
 
+import { useRef, useState } from "react";
+import { formatMoney, formatDate } from "@/lib/utils";
+import { getAccessToken, refreshAccessToken, ApiError } from "@/lib/api";
+
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
+
+type TxnStatus = "matched" | "unmatched" | "duplicate";
+
+interface ParsedTxn {
+  idx: number;
+  txn_type: string;
+  date: string;
+  member_name: string;
+  matched_member_id: string | null;
+  matched_member_name: string | null;
+  amount_cents: number;
+  description: string;
+  reference: string;
+  method: string;
+  status: TxnStatus;
+  include: boolean;
+}
+
+interface ParseResult {
+  filename: string;
+  total: number;
+  matched: number;
+  unmatched: number;
+  duplicate: number;
+  transactions: ParsedTxn[];
+}
+
+const STATUS_STYLE: Record<TxnStatus, string> = {
+  matched: "bg-green-100 text-green-800",
+  unmatched: "bg-amber-100 text-amber-800",
+  duplicate: "bg-gray-100 text-gray-500",
+};
+
+async function apiFetchMultipart<T>(path: string, body: FormData): Promise<T> {
+  const token = getAccessToken();
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const res = await fetch(`${BASE_URL}${path}`, { method: "POST", headers, body });
+  if (res.status === 401) {
+    const newToken = await refreshAccessToken();
+    if (newToken) return apiFetchMultipart<T>(path, body);
+    throw new ApiError(401, "Session expired.");
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new ApiError(res.status, err?.error ?? err?.detail ?? `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+async function apiPost<T>(path: string, data: object): Promise<T> {
+  const token = getAccessToken();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+  const res = await fetch(`${BASE_URL}${path}`, { method: "POST", headers, body: JSON.stringify(data) });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new ApiError(res.status, err?.error ?? err?.detail ?? `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
 export default function ImportPage() {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [parsing, setParsing] = useState(false);
+  const [parseError, setParsError] = useState("");
+  const [result, setResult] = useState<ParseResult | null>(null);
+  const [txns, setTxns] = useState<ParsedTxn[]>([]);
+  const [processing, setProcessing] = useState(false);
+  const [processResult, setProcessResult] = useState<{ recorded: number; skipped_duplicate: number; skipped_no_member: number; errors: string[] } | null>(null);
+
+  async function handleFile(file: File) {
+    setParsError("");
+    setResult(null);
+    setTxns([]);
+    setProcessResult(null);
+    setParsing(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const data = await apiFetchMultipart<ParseResult>("/admin/import/parse/", form);
+      setResult(data);
+      setTxns(data.transactions);
+    } catch (err) {
+      setParsError(err instanceof ApiError ? String(err.detail) : "Failed to parse file.");
+    } finally {
+      setParsing(false);
+    }
+  }
+
+  function onDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file) handleFile(file);
+  }
+
+  function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) handleFile(file);
+    e.target.value = "";
+  }
+
+  function toggleInclude(idx: number) {
+    setTxns((prev) => prev.map((t) => t.idx === idx ? { ...t, include: !t.include } : t));
+  }
+
+  function selectAll(include: boolean) {
+    setTxns((prev) => prev.map((t) => t.status === "matched" ? { ...t, include } : t));
+  }
+
+  async function handleProcess() {
+    const toImport = txns.filter((t) => t.include);
+    if (!toImport.length) return;
+    if (!confirm(`Import ${toImport.length} payment(s)? This cannot be automatically reversed.`)) return;
+    setProcessing(true);
+    setProcessResult(null);
+    try {
+      const res = await apiPost<{ recorded: number; skipped_duplicate: number; skipped_no_member: number; errors: string[] }>(
+        "/admin/import/process/",
+        { transactions: toImport }
+      );
+      setProcessResult(res);
+      // Remove imported rows from preview
+      setTxns((prev) => prev.map((t) => t.include ? { ...t, status: "duplicate" as TxnStatus, include: false } : t));
+    } catch (err) {
+      setParsError(err instanceof ApiError ? String(err.detail) : "Import failed.");
+    } finally {
+      setProcessing(false);
+    }
+  }
+
+  const selectedCount = txns.filter((t) => t.include).length;
+  const selectedCents = txns.filter((t) => t.include).reduce((s, t) => s + t.amount_cents, 0);
+
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="space-y-6 max-w-5xl">
       <div>
-        <h1 className="text-xl font-bold text-gray-900">Import Members & Payments</h1>
+        <h1 className="text-xl font-bold text-gray-900">Import Statements</h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          Use management commands on Render to import data from CSV files.
+          Upload a Wells Fargo bank statement PDF or a Tithe.ly Excel/CSV export to import payments.
         </p>
       </div>
 
-      {/* Download template */}
-      <div className="bg-green-50 border border-green-200 rounded-2xl p-5">
-        <h2 className="text-sm font-semibold text-green-900 mb-2">Download Import Templates</h2>
-        <p className="text-sm text-green-700 mb-4">
-          Download the CSV template below, fill it in with your member data, then upload it to the Render shell.
-        </p>
-        <a
-          href="/member_import_template.csv"
-          download
-          className="inline-flex items-center gap-2 px-4 py-2 bg-green-700 text-white text-sm font-medium rounded-xl hover:bg-green-800 transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-          </svg>
-          Download Member Import Template (CSV)
-        </a>
+      {/* Drop zone */}
+      <div
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={onDrop}
+        onClick={() => fileRef.current?.click()}
+        className={`border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-colors ${
+          dragOver ? "border-green-500 bg-green-50" : "border-gray-200 hover:border-green-400 hover:bg-gray-50"
+        }`}
+      >
+        <input ref={fileRef} type="file" accept=".pdf,.xlsx,.xls,.csv" className="hidden" onChange={onFileChange} />
+        {parsing ? (
+          <div className="flex flex-col items-center gap-3">
+            <div className="animate-spin rounded-full h-8 w-8 border-2 border-green-700 border-t-transparent" />
+            <p className="text-sm text-gray-600">Parsing file…</p>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-2">
+            <svg className="w-10 h-10 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            <p className="text-sm font-medium text-gray-700">Drop file here or click to browse</p>
+            <p className="text-xs text-gray-400">Wells Fargo PDF · Tithe.ly XLSX / CSV</p>
+          </div>
+        )}
       </div>
 
-      {/* How to run on Render */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
-        <h2 className="text-sm font-semibold text-gray-800">Running Import Commands on Render</h2>
-
-        <div className="space-y-1">
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Step 1 — Open the Render Shell</h3>
-          <p className="text-sm text-gray-600">
-            Go to your <strong>Render dashboard</strong>, select the backend service, then click the <strong>Shell</strong> tab.
-          </p>
+      {parseError && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
+          {parseError}
         </div>
+      )}
 
-        <div className="space-y-1">
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Step 2 — Import Members</h3>
-          <p className="text-sm text-gray-600 mb-2">
-            Run the following command to import members from the standard member CSV (Breeze export format):
-          </p>
-          <pre className="bg-gray-900 text-green-300 rounded-xl px-4 py-3 text-xs overflow-x-auto">
-{`python manage.py import_members /path/to/members.csv`}
-          </pre>
+      {/* Process result */}
+      {processResult && (
+        <div className="bg-green-50 border border-green-200 rounded-xl px-5 py-4 text-sm text-green-800 space-y-1">
+          <p className="font-semibold">Import complete</p>
+          <p>Recorded: <strong>{processResult.recorded}</strong> payments</p>
+          {processResult.skipped_duplicate > 0 && <p>Skipped (already recorded): {processResult.skipped_duplicate}</p>}
+          {processResult.skipped_no_member > 0 && <p>Skipped (no member match): {processResult.skipped_no_member}</p>}
+          {processResult.errors.length > 0 && (
+            <details className="mt-2">
+              <summary className="cursor-pointer text-red-700 font-medium">{processResult.errors.length} error(s)</summary>
+              <ul className="mt-1 space-y-0.5 text-xs text-red-600">
+                {processResult.errors.map((e, i) => <li key={i}>{e}</li>)}
+              </ul>
+            </details>
+          )}
         </div>
+      )}
 
-        <div className="space-y-1">
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Step 3 — Import Payments (Tithe.ly/Breeze)</h3>
-          <p className="text-sm text-gray-600 mb-2">
-            For Tithe.ly or Breeze payment exports, use the payment members import command:
-          </p>
-          <pre className="bg-gray-900 text-green-300 rounded-xl px-4 py-3 text-xs overflow-x-auto">
-{`python manage.py import_payment_members /path/to/payments.csv`}
-          </pre>
-        </div>
+      {/* Preview */}
+      {result && txns.length > 0 && (
+        <div className="space-y-4">
+          {/* Summary bar */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-wrap gap-6 items-center">
+            <div className="text-center">
+              <p className="text-xl font-bold text-gray-900">{result.total}</p>
+              <p className="text-xs text-gray-500">Total found</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xl font-bold text-green-700">{result.matched}</p>
+              <p className="text-xs text-gray-500">Matched</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xl font-bold text-amber-600">{result.unmatched}</p>
+              <p className="text-xs text-gray-500">Unmatched</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xl font-bold text-gray-400">{result.duplicate}</p>
+              <p className="text-xs text-gray-500">Already recorded</p>
+            </div>
+            <div className="ml-auto flex items-center gap-3">
+              <button onClick={() => selectAll(true)}
+                className="text-xs text-green-700 underline underline-offset-2">Select all matched</button>
+              <button onClick={() => selectAll(false)}
+                className="text-xs text-gray-500 underline underline-offset-2">Deselect all</button>
+            </div>
+          </div>
 
-        <div className="space-y-1">
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Step 4 — Verify</h3>
-          <p className="text-sm text-gray-600">
-            After running the import, check the <strong>Members</strong> and <strong>Payments</strong> pages in this admin panel to verify the data was imported correctly.
-          </p>
-        </div>
-      </div>
-
-      {/* Tithe.ly / Breeze CSV columns reference */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-        <h2 className="text-sm font-semibold text-gray-800 mb-4">CSV Column Reference</h2>
-
-        <div className="space-y-6">
-          <div>
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-              Member Import Template Columns
-            </h3>
+          {/* Transaction table */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm border border-gray-100 rounded-xl overflow-hidden">
+              <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-gray-50 border-b border-gray-100">
-                    <th className="text-left px-4 py-2 text-xs font-semibold text-gray-500 uppercase">Column</th>
-                    <th className="text-left px-4 py-2 text-xs font-semibold text-gray-500 uppercase">Required</th>
-                    <th className="text-left px-4 py-2 text-xs font-semibold text-gray-500 uppercase">Notes</th>
+                  <tr className="border-b border-gray-100 bg-gray-50">
+                    <th className="px-4 py-3 w-10" />
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Date</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">From (bank)</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Matched Member</th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Amount</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {[
-                    { col: "first_name", req: "Yes", note: "Member first name" },
-                    { col: "last_name", req: "Yes", note: "Member last name" },
-                    { col: "email", req: "No", note: "Contact email address" },
-                    { col: "phone", req: "No", note: "Primary phone number" },
-                    { col: "join_date", req: "Yes", note: "YYYY-MM-DD format" },
-                    { col: "status", req: "No", note: "active, inactive, suspended (default: active)" },
-                    { col: "tier", req: "No", note: "standard, senior, family (default: standard)" },
-                    { col: "notes", req: "No", note: "Internal notes" },
-                  ].map((row) => (
-                    <tr key={row.col} className="hover:bg-gray-50">
-                      <td className="px-4 py-2 font-mono text-xs text-gray-700">{row.col}</td>
-                      <td className="px-4 py-2 text-xs">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                          row.req === "Yes" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-500"
-                        }`}>
-                          {row.req}
+                  {txns.map((t) => (
+                    <tr key={t.idx}
+                      className={`${t.status === "duplicate" ? "opacity-40" : "hover:bg-gray-50"} ${t.include ? "bg-green-50/40" : ""}`}>
+                      <td className="px-4 py-3">
+                        {t.status !== "duplicate" && (
+                          <input type="checkbox" checked={t.include}
+                            onChange={() => toggleInclude(t.idx)}
+                            className="w-4 h-4 accent-green-700 cursor-pointer" />
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{formatDate(t.date)}</td>
+                      <td className="px-4 py-3 text-gray-700">{t.member_name || <span className="text-gray-300 italic">—</span>}</td>
+                      <td className="px-4 py-3">
+                        {t.matched_member_name
+                          ? <span className="font-medium text-gray-900">{t.matched_member_name}</span>
+                          : <span className="text-amber-600 text-xs italic">no match</span>}
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold text-gray-800 whitespace-nowrap">
+                        {formatMoney(t.amount_cents)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_STYLE[t.status]}`}>
+                          {t.status === "duplicate" ? "already recorded" : t.status}
                         </span>
                       </td>
-                      <td className="px-4 py-2 text-xs text-gray-500">{row.note}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -114,52 +280,30 @@ export default function ImportPage() {
             </div>
           </div>
 
-          <div>
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-              Tithe.ly / Breeze Export Columns (payment_members import)
-            </h3>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm border border-gray-100 rounded-xl overflow-hidden">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-100">
-                    <th className="text-left px-4 py-2 text-xs font-semibold text-gray-500 uppercase">Column</th>
-                    <th className="text-left px-4 py-2 text-xs font-semibold text-gray-500 uppercase">Notes</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {[
-                    { col: "First Name", note: "Member first name (used for matching)" },
-                    { col: "Last Name", note: "Member last name (used for matching)" },
-                    { col: "Amount", note: "Payment amount in dollars (e.g. 50.00)" },
-                    { col: "Date", note: "Payment date (M/D/YYYY or YYYY-MM-DD)" },
-                    { col: "Payment Method", note: "check, cash, bank_transfer, online, etc." },
-                    { col: "Check / Transaction Number", note: "Reference number (optional)" },
-                    { col: "Fund Name", note: "Ignored — all mapped to contributions" },
-                    { col: "Note", note: "Optional notes" },
-                  ].map((row) => (
-                    <tr key={row.col} className="hover:bg-gray-50">
-                      <td className="px-4 py-2 font-mono text-xs text-gray-700">{row.col}</td>
-                      <td className="px-4 py-2 text-xs text-gray-500">{row.note}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          {/* Import bar */}
+          <div className="sticky bottom-0 bg-white border border-gray-200 rounded-2xl shadow-lg px-5 py-4 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-gray-800">
+                {selectedCount} payment{selectedCount !== 1 ? "s" : ""} selected — {formatMoney(selectedCents)}
+              </p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Unmatched rows will not be imported — record them manually via Payments.
+              </p>
             </div>
+            <button
+              onClick={handleProcess}
+              disabled={processing || selectedCount === 0}
+              className="bg-green-700 text-white text-sm font-semibold px-6 py-2.5 rounded-xl hover:bg-green-800 disabled:opacity-40"
+            >
+              {processing ? "Importing…" : `Import ${selectedCount} Payment${selectedCount !== 1 ? "s" : ""}`}
+            </button>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Tips */}
-      <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5">
-        <h2 className="text-sm font-semibold text-amber-900 mb-2">Tips &amp; Common Issues</h2>
-        <ul className="text-sm text-amber-800 space-y-1.5 list-disc list-inside">
-          <li>Always back up the database before running a bulk import.</li>
-          <li>Member matching uses fuzzy name matching — review the import log for unmatched rows.</li>
-          <li>Dates must be in YYYY-MM-DD format for the member template; Tithe.ly exports use M/D/YYYY.</li>
-          <li>Re-running the import with the same file is safe — duplicate detection prevents double entries.</li>
-          <li>If a member cannot be matched, the payment is flagged for manual review in the Reconciliation queue.</li>
-        </ul>
-      </div>
+      {result && txns.length === 0 && (
+        <p className="text-sm text-gray-500 text-center py-8">No importable transactions found in this file.</p>
+      )}
     </div>
   );
 }

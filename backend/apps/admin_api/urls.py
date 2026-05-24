@@ -19,4 +19,6 @@ urlpatterns = [
     path("obligations/bulk-delete-dues/", views.bulk_delete_dues, name="admin-bulk-delete-dues"),
     path("obligations/reset-deadline/", views.reset_dues_deadline, name="admin-reset-deadline"),
     path("payouts/", views.payouts_list, name="admin-payouts"),
+    path("import/parse/", views.statement_parse, name="admin-import-parse"),
+    path("import/process/", views.statement_process, name="admin-import-process"),
 ]

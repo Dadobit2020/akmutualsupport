@@ -1133,3 +1133,167 @@ def payouts_list(request):
         "description": description,
         "reference": reference,
     }, status=status.HTTP_201_CREATED)
+
+
+# ── Statement Upload: Parse ────────────────────────────────────────────────────
+
+@api_view(["POST"])
+@permission_classes(_ADMIN_PERMISSIONS)
+def statement_parse(request):
+    """
+    Accept a bank statement PDF or Tithe.ly Excel/CSV upload.
+    Returns a preview list of transactions with member matching — no DB writes.
+    """
+    from .statement_parser import parse_wells_fargo_pdf, parse_tithely_excel, build_preview
+
+    f = request.FILES.get("file")
+    if not f:
+        return Response({"error": "No file uploaded."}, status=status.HTTP_400_BAD_REQUEST)
+
+    filename = f.name.lower()
+    file_bytes = f.read()
+
+    try:
+        if filename.endswith(".pdf"):
+            raw_txns = parse_wells_fargo_pdf(file_bytes)
+        elif filename.endswith((".xlsx", ".xls", ".csv")):
+            raw_txns = parse_tithely_excel(file_bytes, filename)
+        else:
+            return Response(
+                {"error": "Unsupported file type. Upload a PDF, XLSX, XLS, or CSV."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+    except Exception as e:
+        return Response({"error": f"Failed to parse file: {e}"}, status=status.HTTP_400_BAD_REQUEST)
+
+    org = request.organization
+    members = list(Member.objects.filter(organization=org))
+    preview = build_preview(raw_txns, members, org)
+
+    matched = sum(1 for p in preview if p["status"] == "matched")
+    unmatched = sum(1 for p in preview if p["status"] == "unmatched")
+    duplicate = sum(1 for p in preview if p["status"] == "duplicate")
+
+    return Response({
+        "filename": f.name,
+        "total": len(preview),
+        "matched": matched,
+        "unmatched": unmatched,
+        "duplicate": duplicate,
+        "transactions": preview,
+    })
+
+
+# ── Statement Upload: Process ─────────────────────────────────────────────────
+
+@api_view(["POST"])
+@permission_classes(_ADMIN_PERMISSIONS)
+def statement_process(request):
+    """
+    Process confirmed transactions from a parsed statement.
+    Body: { transactions: [...] } — only rows with include=true are recorded.
+    Each row must have: matched_member_id (or null), amount_cents, date, method, reference, description.
+    """
+    from apps.ledger.models import LedgerAccount
+
+    org = request.organization
+    rows = request.data.get("transactions", [])
+    if not rows:
+        return Response({"error": "No transactions provided."}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        cash_account = LedgerAccount.objects.get(organization=org, code="CASH")
+        contrib_account = LedgerAccount.objects.get(organization=org, code="CONTRIB_REV")
+    except LedgerAccount.DoesNotExist as e:
+        return Response({"error": f"Ledger account missing: {e}. Run bootstrap_org first."}, status=400)
+
+    posted_by = request.user
+    stats = {"recorded": 0, "skipped_duplicate": 0, "skipped_no_member": 0, "errors": []}
+
+    for row in rows:
+        if not row.get("include"):
+            continue
+
+        try:
+            from datetime import date as _date
+            pay_date = _date.fromisoformat(row["date"])
+            amount_cents = int(row["amount_cents"])
+            member_id = row.get("matched_member_id")
+            method = row.get("method", "other")
+            reference = row.get("reference", "")
+            notes = row.get("description", "")
+        except (KeyError, ValueError) as e:
+            stats["errors"].append(str(e))
+            continue
+
+        member = None
+        if member_id:
+            try:
+                member = Member.objects.get(id=member_id, organization=org)
+            except Member.DoesNotExist:
+                stats["skipped_no_member"] += 1
+                continue
+        else:
+            stats["skipped_no_member"] += 1
+            continue
+
+        # Idempotency check
+        if Payment.objects.filter(
+            organization=org,
+            member=member,
+            amount_cents=amount_cents,
+            payment_date=pay_date,
+        ).exists():
+            stats["skipped_duplicate"] += 1
+            continue
+
+        try:
+            with transaction.atomic():
+                txn = LedgerTransaction.objects.create(
+                    organization=org,
+                    description=f"Payment — {member.get_full_name()} {reference}".strip(),
+                    transaction_date=pay_date,
+                    source=TransactionSource.PAYMENT,
+                    posted_by=posted_by,
+                    notes=notes,
+                )
+                LedgerEntry.objects.create(
+                    ledger_transaction=txn, account=cash_account,
+                    debit_cents=amount_cents, credit_cents=0,
+                    member=member, description="Cash/Zelle receipt",
+                )
+                LedgerEntry.objects.create(
+                    ledger_transaction=txn, account=contrib_account,
+                    debit_cents=0, credit_cents=amount_cents,
+                    member=member, description="Contribution revenue",
+                )
+                payment = Payment.objects.create(
+                    organization=org, member=member,
+                    amount_cents=amount_cents, payment_date=pay_date,
+                    method=method, reference=reference, notes=notes,
+                    ledger_transaction=txn,
+                )
+                # Auto-apply to oldest open obligations
+                remaining = amount_cents
+                for ob in Obligation.objects.filter(
+                    member=member,
+                    status__in=[ObligationStatus.OPEN, ObligationStatus.PARTIALLY_PAID],
+                ).order_by("due_date"):
+                    if remaining <= 0:
+                        break
+                    apply = min(remaining, ob.outstanding_cents)
+                    if apply > 0:
+                        ob.apply_payment_cents(apply)
+                        remaining -= apply
+
+                stats["recorded"] += 1
+        except Exception as e:
+            stats["errors"].append(f"{member.get_full_name()}: {e}")
+
+    return Response({
+        "ok": True,
+        "recorded": stats["recorded"],
+        "skipped_duplicate": stats["skipped_duplicate"],
+        "skipped_no_member": stats["skipped_no_member"],
+        "errors": stats["errors"],
+    })
