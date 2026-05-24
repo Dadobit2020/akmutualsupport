@@ -34,7 +34,7 @@ export function getRefreshToken(): string | null {
 
 // ── Core fetch wrapper ────────────────────────────────────────────────────────
 
-async function refreshAccessToken(): Promise<string | null> {
+export async function refreshAccessToken(): Promise<string | null> {
   const refresh = getRefreshToken();
   if (!refresh) return null;
   const res = await fetch(`${BASE_URL}/auth/token/refresh/`, {
