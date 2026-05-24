@@ -234,6 +234,7 @@ export default function PaymentsPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [search, setSearch] = useState("");
   const [method, setMethod] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -247,6 +248,7 @@ export default function PaymentsPage() {
     setError("");
     try {
       const params: Record<string, string> = { page: String(page) };
+      if (search) params.search = search;
       if (method) params.method = method;
       if (dateFrom) params.date_from = dateFrom;
       if (dateTo) params.date_to = dateTo;
@@ -260,13 +262,13 @@ export default function PaymentsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, method, dateFrom, dateTo]);
+  }, [page, search, method, dateFrom, dateTo]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  useEffect(() => { setPage(1); }, [method, dateFrom, dateTo]);
+  useEffect(() => { setPage(1); }, [search, method, dateFrom, dateTo]);
 
   async function handleDelete(p: AdminPayment) {
     if (!confirm(
@@ -297,6 +299,14 @@ export default function PaymentsPage() {
 
       {/* Filters */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-wrap gap-3">
+        <div className="flex-1 min-w-48">
+          <Input
+            label="Search member"
+            placeholder="Name or email..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Method</label>
           <select
@@ -323,11 +333,11 @@ export default function PaymentsPage() {
           onChange={(e) => setDateTo(e.target.value)}
           className="w-40"
         />
-        {(method || dateFrom || dateTo) && (
+        {(search || method || dateFrom || dateTo) && (
           <div className="flex items-end">
             <Button
               variant="ghost"
-              onClick={() => { setMethod(""); setDateFrom(""); setDateTo(""); }}
+              onClick={() => { setSearch(""); setMethod(""); setDateFrom(""); setDateTo(""); }}
               className="text-xs"
             >
               Clear filters

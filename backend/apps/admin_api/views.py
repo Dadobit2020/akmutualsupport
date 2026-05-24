@@ -5,7 +5,7 @@ All views require IsAuthenticated + IsOrgAdmin.
 import math
 from datetime import date, timedelta
 
-from django.db import transaction
+from django.db import models, transaction
 from django.db.models import Q, Sum
 from django.utils import timezone
 
@@ -356,6 +356,14 @@ def payments_list(request):
         if member_id:
             qs = qs.filter(member_id=member_id)
 
+        search = request.query_params.get("search", "").strip()
+        if search:
+            qs = qs.filter(
+                models.Q(member__first_name__icontains=search) |
+                models.Q(member__last_name__icontains=search) |
+                models.Q(member__email__icontains=search)
+            )
+
         method = request.query_params.get("method", "").strip()
         if method:
             qs = qs.filter(method=method)
@@ -655,11 +663,19 @@ def obligations_list(request):
     if sort in ("due_date", "-due_date", "amount_cents", "-amount_cents"):
         qs = qs.order_by(sort)
 
+    from django.db.models import Sum, F, ExpressionWrapper, IntegerField
+    total_outstanding = qs.aggregate(
+        s=Sum(
+            ExpressionWrapper(F("amount_cents") - F("paid_cents"), output_field=IntegerField())
+        )
+    )["s"] or 0
+
     items, total, page, total_pages = _paginate(qs, request, page_size=20)
     return Response({
         "count": total,
         "page": page,
         "total_pages": total_pages,
+        "total_outstanding_cents": total_outstanding,
         "results": [_serialize_obligation(o) for o in items],
     })
 

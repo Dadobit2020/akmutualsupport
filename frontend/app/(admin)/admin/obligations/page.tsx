@@ -148,6 +148,7 @@ function EditModal({
 export default function ObligationsPage() {
   const [obligations, setObligations] = useState<AdminObligation[]>([]);
   const [total, setTotal] = useState(0);
+  const [totalOutstandingCents, setTotalOutstandingCents] = useState(0);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [statusFilter, setStatusFilter] = useState("open");
@@ -172,6 +173,7 @@ export default function ObligationsPage() {
       setObligations(res.results);
       setTotal(res.count);
       setTotalPages(res.total_pages);
+      setTotalOutstandingCents(res.total_outstanding_cents ?? 0);
     } catch (err) {
       if (err instanceof ApiError) setError(err.message);
       else setError("Failed to load obligations.");
@@ -215,7 +217,6 @@ export default function ObligationsPage() {
     }
   };
 
-  const totalOutstanding = obligations.reduce((sum, o) => sum + o.outstanding_cents, 0);
 
   return (
     <div className="space-y-5 max-w-6xl">
@@ -283,7 +284,7 @@ export default function ObligationsPage() {
         {(statusFilter === "open" || statusFilter === "partially_paid") && (
           <div className="ml-auto text-right">
             <p className="text-xs text-gray-400">Total Outstanding</p>
-            <p className="text-lg font-bold text-amber-700">{formatMoney(totalOutstanding)}</p>
+            <p className="text-lg font-bold text-amber-700">{formatMoney(totalOutstandingCents)}</p>
           </div>
         )}
       </div>

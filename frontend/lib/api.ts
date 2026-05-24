@@ -438,6 +438,7 @@ export interface AdminPaginatedResponse<T> {
   count: number;
   page: number;
   total_pages: number;
+  total_outstanding_cents?: number;
   results: T[];
 }
 
