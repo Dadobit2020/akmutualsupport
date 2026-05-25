@@ -564,9 +564,12 @@ function TemplatesTab({
   onRefresh: () => void;
 }) {
   const [search, setSearch] = useState("");
-  const [editingTemplate, setEditingTemplate] = useState<MessageTemplate | null | "new">(null);
+  const [editingTemplate, setEditingTemplate] = useState<MessageTemplate | null>(null);
+  const [showNewTemplate, setShowNewTemplate] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState("");
+
+  function closeModal() { setEditingTemplate(null); setShowNewTemplate(false); }
 
   async function handleDelete(t: MessageTemplate) {
     if (!confirm(`Delete template "${t.name}"? This cannot be undone.`)) return;
@@ -582,7 +585,7 @@ function TemplatesTab({
   }
 
   function handleDuplicate(t: MessageTemplate) {
-    setEditingTemplate({ ...t, id: "", name: `${t.name} (copy)` } as any);
+    setEditingTemplate({ ...t, id: "", name: `${t.name} (copy)` });
   }
 
   const filtered = templates.filter((t) =>
@@ -603,13 +606,13 @@ function TemplatesTab({
         <div className="flex-1">
           <Input placeholder="Search templates..." value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
-        <Button onClick={() => setEditingTemplate("new")}>+ New Template</Button>
+        <Button onClick={() => setShowNewTemplate(true)}>+ New Template</Button>
       </div>
 
       {filtered.length === 0 && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
           <p className="text-gray-400 text-sm">No templates yet — create your first one.</p>
-          <Button className="mt-4" onClick={() => setEditingTemplate("new")}>Create Template</Button>
+          <Button className="mt-4" onClick={() => setShowNewTemplate(true)}>Create Template</Button>
         </div>
       )}
 
@@ -641,11 +644,11 @@ function TemplatesTab({
         </div>
       )}
 
-      {(editingTemplate === "new" || (editingTemplate && editingTemplate !== "new")) && (
+      {(showNewTemplate || editingTemplate !== null) && (
         <TemplateModal
-          template={editingTemplate === "new" ? null : editingTemplate}
-          onClose={() => setEditingTemplate(null)}
-          onSaved={() => { setEditingTemplate(null); onRefresh(); }}
+          template={editingTemplate}
+          onClose={closeModal}
+          onSaved={() => { closeModal(); onRefresh(); }}
         />
       )}
     </div>
