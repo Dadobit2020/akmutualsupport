@@ -315,7 +315,7 @@ function ComposeTab({ templates }: { templates: MessageTemplate[] }) {
     const t = templates.find((x) => x.id === id);
     if (!t) return;
     setTemplateId(id);
-    if (t.channel !== "both") setChannel(t.channel as any);
+    setChannel(t.channel);
     if (t.subject) setSubject(t.subject);
     setBody(t.body);
   }
