@@ -1585,6 +1585,28 @@ def messaging_recipient_count(request):
     return Response({"count": count, "member_count": members_qs.count()})
 
 
+def _render_for_member(text, member):
+    """Replace {{variable}} placeholders with member-specific values."""
+    open_ob = Obligation.objects.filter(
+        member=member,
+        status__in=[ObligationStatus.OPEN, ObligationStatus.PARTIALLY_PAID],
+    ).order_by("due_date").first()
+
+    context = {
+        "member_name": f"{member.first_name} {member.last_name}",
+        "first_name": member.first_name,
+        "last_name": member.last_name,
+        "amount_due": f"${open_ob.outstanding_cents / 100:.2f}" if open_ob else "—",
+        "due_date": str(open_ob.due_date) if open_ob else "—",
+        "event": open_ob.description if open_ob else "—",
+        "amount": f"${open_ob.amount_cents / 100:.2f}" if open_ob else "—",
+    }
+    result = text
+    for key, value in context.items():
+        result = result.replace(f"{{{{{key}}}}}", str(value))
+    return result
+
+
 @api_view(["POST"])
 @permission_classes(_ADMIN_PERMISSIONS)
 def messaging_send(request):
@@ -1606,19 +1628,28 @@ def messaging_send(request):
     members = list(_get_recipient_members_qs(org, recipient_group, custom_member_ids))
     STOP_FOOTER = "\n\nReply STOP to unsubscribe."
     queued = 0
+    skipped = 0
 
     for member in members:
+        rendered_body = _render_for_member(body, member)
+        rendered_subject = _render_for_member(subject, member)
         channels = [channel] if channel != "both" else ["email", "sms"]
         for ch in channels:
-            if ch == "email" and member.email:
-                queue_email(organization=org, member=member, subject=subject, body=body)
-                queued += 1
+            if ch == "email":
+                if member.email:
+                    queue_email(organization=org, member=member,
+                                subject=rendered_subject, body=rendered_body)
+                    queued += 1
+                else:
+                    skipped += 1
             elif ch == "sms":
                 phone = member.phone_whatsapp or member.phone
                 if phone:
-                    sms_body = body if STOP_FOOTER.strip() in body else body + STOP_FOOTER
+                    sms_body = rendered_body if STOP_FOOTER.strip() in rendered_body else rendered_body + STOP_FOOTER
                     queue_sms(organization=org, member=member, body=sms_body)
                     queued += 1
+                else:
+                    skipped += 1
 
     group_labels = {
         "all_active": "all active members",
@@ -1627,9 +1658,12 @@ def messaging_send(request):
         "custom": f"{len(members)} selected members",
     }
     log_action(request, "message_sent",
-               f"Sent {channel} to {group_labels.get(recipient_group, recipient_group)}: {queued} messages queued",
+               f"Sent {channel} to {group_labels.get(recipient_group, recipient_group)}: {queued} queued, {skipped} skipped",
                target_type="broadcast")
-    return Response({"queued": queued, "detail": f"{queued} messages queued for delivery."})
+    detail = f"{queued} messages queued for delivery."
+    if skipped:
+        detail += f" {skipped} skipped (no valid contact info)."
+    return Response({"queued": queued, "skipped": skipped, "detail": detail})
 
 
 @api_view(["GET"])
