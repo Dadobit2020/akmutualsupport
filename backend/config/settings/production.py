@@ -3,6 +3,8 @@ from decouple import config
 
 DEBUG = config("DEBUG", default=False, cast=bool)
 
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+
 _secure = not DEBUG
 
 SECURE_SSL_REDIRECT = _secure
