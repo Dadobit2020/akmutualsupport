@@ -1590,7 +1590,7 @@ def _render_for_member(text, member):
     open_ob = Obligation.objects.filter(
         member=member,
         status__in=[ObligationStatus.OPEN, ObligationStatus.PARTIALLY_PAID],
-    ).order_by("due_date").first()
+    ).select_related("event").order_by("due_date").first()
 
     context = {
         "member_name": f"{member.first_name} {member.last_name}",
@@ -1598,7 +1598,7 @@ def _render_for_member(text, member):
         "last_name": member.last_name,
         "amount_due": f"${open_ob.outstanding_cents / 100:.2f}" if open_ob else "—",
         "due_date": str(open_ob.due_date) if open_ob else "—",
-        "event": open_ob.description if open_ob else "—",
+        "event": (open_ob.event.description if open_ob.event else open_ob.obligation_type) if open_ob else "—",
         "amount": f"${open_ob.amount_cents / 100:.2f}" if open_ob else "—",
     }
     result = text
