@@ -692,3 +692,82 @@ export async function adminRecordPayout(data: {
     body: JSON.stringify(data),
   });
 }
+
+// ── Messaging ─────────────────────────────────────────────────────────────────
+
+export interface MessageTemplate {
+  id: string;
+  name: string;
+  channel: "email" | "sms";
+  subject: string;
+  body: string;
+  category: string;
+  is_active: boolean;
+}
+
+export interface CommunicationLog {
+  id: string;
+  channel: string;
+  recipient_address: string;
+  recipient_name: string;
+  subject: string;
+  body_preview: string;
+  status: string;
+  sent_at: string | null;
+  created_at: string;
+  error_message: string;
+}
+
+export async function adminMessagingTemplates(): Promise<MessageTemplate[]> {
+  return apiFetch<MessageTemplate[]>("/admin/messaging/templates/");
+}
+
+export async function adminCreateTemplate(
+  data: Omit<MessageTemplate, "id" | "is_active">
+): Promise<MessageTemplate> {
+  return apiFetch<MessageTemplate>("/admin/messaging/templates/", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function adminUpdateTemplate(
+  id: string,
+  data: Partial<Omit<MessageTemplate, "id">>
+): Promise<MessageTemplate> {
+  return apiFetch<MessageTemplate>(`/admin/messaging/templates/${id}/`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function adminDeleteTemplate(id: string): Promise<void> {
+  return apiFetch(`/admin/messaging/templates/${id}/`, { method: "DELETE" });
+}
+
+export async function adminMessagingRecipientCount(
+  group: string,
+  channel: string
+): Promise<{ count: number; member_count: number }> {
+  return apiFetch(`/admin/messaging/recipient-count/?group=${group}&channel=${channel}`);
+}
+
+export async function adminSendMessage(data: {
+  channel: string;
+  recipient_group: string;
+  member_ids?: string[];
+  subject?: string;
+  body: string;
+}): Promise<{ queued: number; detail: string }> {
+  return apiFetch("/admin/messaging/send/", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function adminMessagingHistory(
+  params?: Record<string, string>
+): Promise<AdminPaginatedResponse<CommunicationLog>> {
+  const qs = params ? "?" + new URLSearchParams(params).toString() : "";
+  return apiFetch<AdminPaginatedResponse<CommunicationLog>>(`/admin/messaging/history/${qs}`);
+}

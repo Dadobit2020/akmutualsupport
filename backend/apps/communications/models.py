@@ -20,15 +20,17 @@ class MessageTemplate(OrganizationScopedModel):
     """Versioned notification templates with variable substitution."""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    name = models.CharField(max_length=100, unique=True)
+    name = models.CharField(max_length=100)
     channel = models.CharField(max_length=10, choices=CommunicationChannel.choices)
     subject = models.CharField(max_length=300, blank=True)
     body_en = models.TextField()
     body_am = models.TextField(blank=True, help_text="Amharic translation (Phase 2)")
+    category = models.CharField(max_length=60, blank=True)
     is_active = models.BooleanField(default=True)
 
     class Meta:
         db_table = "message_template"
+        unique_together = [("organization", "name")]
 
     def __str__(self):
         return f"{self.name} ({self.channel})"

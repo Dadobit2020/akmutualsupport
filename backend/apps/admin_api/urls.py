@@ -23,4 +23,9 @@ urlpatterns = [
     path("payouts/", views.payouts_list, name="admin-payouts"),
     path("import/parse/", views.statement_parse, name="admin-import-parse"),
     path("import/process/", views.statement_process, name="admin-import-process"),
+    path("messaging/templates/", views.messaging_templates, name="admin-messaging-templates"),
+    path("messaging/templates/<uuid:template_id>/", views.messaging_template_detail, name="admin-messaging-template-detail"),
+    path("messaging/send/", views.messaging_send, name="admin-messaging-send"),
+    path("messaging/history/", views.messaging_history, name="admin-messaging-history"),
+    path("messaging/recipient-count/", views.messaging_recipient_count, name="admin-messaging-recipient-count"),
 ]

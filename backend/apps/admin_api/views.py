@@ -1461,3 +1461,222 @@ def statement_process(request):
         "skipped_no_member": stats["skipped_no_member"],
         "errors": stats["errors"],
     })
+
+
+# ── Messaging ─────────────────────────────────────────────────────────────────
+
+def _get_recipient_members_qs(org, group, custom_ids=None):
+    qs = Member.objects.filter(organization=org)
+    if group == "all_active":
+        return qs.filter(status=MemberStatus.ACTIVE)
+    elif group == "outstanding_dues":
+        member_ids = Obligation.objects.filter(
+            organization=org,
+            status__in=[ObligationStatus.OPEN, ObligationStatus.PARTIALLY_PAID],
+        ).values_list("member_id", flat=True).distinct()
+        return qs.filter(id__in=member_ids, status=MemberStatus.ACTIVE)
+    elif group == "suspended":
+        return qs.filter(status=MemberStatus.SUSPENDED)
+    elif group == "custom":
+        return qs.filter(id__in=(custom_ids or []))
+    return qs.filter(status=MemberStatus.ACTIVE)
+
+
+def _serialize_template(t):
+    return {
+        "id": str(t.id),
+        "name": t.name,
+        "channel": t.channel,
+        "subject": t.subject,
+        "body": t.body_en,
+        "category": t.category,
+        "is_active": t.is_active,
+    }
+
+
+@api_view(["GET", "POST"])
+@permission_classes(_ADMIN_PERMISSIONS)
+def messaging_templates(request):
+    from apps.communications.models import MessageTemplate
+    org = request.organization
+
+    if request.method == "GET":
+        templates = MessageTemplate.objects.filter(organization=org).order_by("category", "name")
+        return Response([_serialize_template(t) for t in templates])
+
+    data = request.data
+    name = (data.get("name") or "").strip()
+    body = (data.get("body") or "").strip()
+    if not name or not body:
+        return Response({"detail": "Name and body are required."}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        t = MessageTemplate.objects.create(
+            organization=org,
+            name=name,
+            channel=data.get("channel", "email"),
+            subject=(data.get("subject") or "").strip(),
+            body_en=body,
+            category=(data.get("category") or "").strip(),
+        )
+        log_action(request, "template_created", f"Created template '{name}'",
+                   target_type="template", target_id=str(t.id), target_label=name)
+        return Response(_serialize_template(t), status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(["PATCH", "DELETE"])
+@permission_classes(_ADMIN_PERMISSIONS)
+def messaging_template_detail(request, template_id):
+    from apps.communications.models import MessageTemplate
+    org = request.organization
+    try:
+        t = MessageTemplate.objects.get(id=template_id, organization=org)
+    except MessageTemplate.DoesNotExist:
+        return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == "DELETE":
+        name = t.name
+        t.delete()
+        log_action(request, "template_deleted", f"Deleted template '{name}'",
+                   target_type="template", target_id=str(template_id))
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    data = request.data
+    if "name" in data:
+        t.name = data["name"]
+    if "channel" in data:
+        t.channel = data["channel"]
+    if "subject" in data:
+        t.subject = data["subject"]
+    if "body" in data:
+        t.body_en = data["body"]
+    if "category" in data:
+        t.category = data["category"]
+    if "is_active" in data:
+        t.is_active = data["is_active"]
+    t.save()
+    log_action(request, "template_updated", f"Updated template '{t.name}'",
+               target_type="template", target_id=str(t.id), target_label=t.name)
+    return Response(_serialize_template(t))
+
+
+@api_view(["GET"])
+@permission_classes(_ADMIN_PERMISSIONS)
+def messaging_recipient_count(request):
+    org = request.organization
+    group = request.query_params.get("group", "all_active")
+    channel = request.query_params.get("channel", "email")
+    members_qs = _get_recipient_members_qs(org, group)
+
+    if channel == "email":
+        count = members_qs.exclude(email="").count()
+    elif channel == "sms":
+        count = members_qs.filter(
+            models.Q(phone__gt="") | models.Q(phone_whatsapp__gt="")
+        ).count()
+    else:  # both
+        email_c = members_qs.exclude(email="").count()
+        sms_c = members_qs.filter(
+            models.Q(phone__gt="") | models.Q(phone_whatsapp__gt="")
+        ).count()
+        count = email_c + sms_c
+
+    return Response({"count": count, "member_count": members_qs.count()})
+
+
+@api_view(["POST"])
+@permission_classes(_ADMIN_PERMISSIONS)
+def messaging_send(request):
+    from apps.communications.tasks import queue_email, queue_sms
+    org = request.organization
+    data = request.data
+
+    channel = data.get("channel", "email")
+    recipient_group = data.get("recipient_group", "all_active")
+    custom_member_ids = data.get("member_ids", [])
+    subject = (data.get("subject") or "").strip()
+    body = (data.get("body") or "").strip()
+
+    if not body:
+        return Response({"detail": "Message body is required."}, status=status.HTTP_400_BAD_REQUEST)
+    if channel in ("email", "both") and not subject:
+        return Response({"detail": "Subject is required for email."}, status=status.HTTP_400_BAD_REQUEST)
+
+    members = list(_get_recipient_members_qs(org, recipient_group, custom_member_ids))
+    STOP_FOOTER = "\n\nReply STOP to unsubscribe."
+    queued = 0
+
+    for member in members:
+        channels = [channel] if channel != "both" else ["email", "sms"]
+        for ch in channels:
+            if ch == "email" and member.email:
+                queue_email(organization=org, member=member, subject=subject, body=body)
+                queued += 1
+            elif ch == "sms":
+                phone = member.phone_whatsapp or member.phone
+                if phone:
+                    sms_body = body if STOP_FOOTER.strip() in body else body + STOP_FOOTER
+                    queue_sms(organization=org, member=member, body=sms_body)
+                    queued += 1
+
+    group_labels = {
+        "all_active": "all active members",
+        "outstanding_dues": "members with outstanding dues",
+        "suspended": "suspended members",
+        "custom": f"{len(members)} selected members",
+    }
+    log_action(request, "message_sent",
+               f"Sent {channel} to {group_labels.get(recipient_group, recipient_group)}: {queued} messages queued",
+               target_type="broadcast")
+    return Response({"queued": queued, "detail": f"{queued} messages queued for delivery."})
+
+
+@api_view(["GET"])
+@permission_classes(_ADMIN_PERMISSIONS)
+def messaging_history(request):
+    from apps.communications.models import Communication
+    org = request.organization
+    qs = (
+        Communication.objects.filter(organization=org)
+        .select_related("recipient_member")
+        .order_by("-created_at")
+    )
+
+    channel = request.query_params.get("channel", "").strip()
+    if channel:
+        qs = qs.filter(channel=channel)
+
+    msg_status = request.query_params.get("status", "").strip()
+    if msg_status:
+        qs = qs.filter(status=msg_status)
+
+    date_from = request.query_params.get("date_from", "").strip()
+    if date_from:
+        qs = qs.filter(created_at__date__gte=date_from)
+
+    date_to = request.query_params.get("date_to", "").strip()
+    if date_to:
+        qs = qs.filter(created_at__date__lte=date_to)
+
+    items, total, page, total_pages = _paginate(qs, request, page_size=25)
+    return Response({
+        "count": total,
+        "page": page,
+        "total_pages": total_pages,
+        "results": [{
+            "id": str(c.id),
+            "channel": c.channel,
+            "recipient_address": c.recipient_address,
+            "recipient_name": (
+                f"{c.recipient_member.first_name} {c.recipient_member.last_name}"
+                if c.recipient_member else ""
+            ),
+            "subject": c.subject,
+            "body_preview": c.body[:200],
+            "status": c.status,
+            "sent_at": c.sent_at.isoformat() if c.sent_at else None,
+            "created_at": c.created_at.isoformat(),
+            "error_message": c.error_message,
+        } for c in items],
+    })
